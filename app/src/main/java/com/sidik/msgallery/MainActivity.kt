@@ -40,7 +40,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-private enum class Screen { GALLERY, SETTINGS, VAULT, LOCK }
+private enum class Screen { GALLERY, SETTINGS, VAULT, TRASH, LOCK }
 private enum class GalleryMode { PHOTOS, ALBUMS }
 
 class MainActivity : FragmentActivity() {
@@ -66,6 +66,7 @@ class MainActivity : FragmentActivity() {
         }
 
     private var items by mutableStateOf<List<MediaItem>>(emptyList())
+    private var trashItems by mutableStateOf<List<MediaItem>>(emptyList())
     private var loading by mutableStateOf(true)
     private val pinLock by lazy { PinLockManager(this) }
     private var screen by mutableStateOf(Screen.GALLERY)
@@ -87,7 +88,10 @@ class MainActivity : FragmentActivity() {
                             onSettings = { screen = Screen.SETTINGS },
                             onDelete = { requestDelete(it) },
                             onFavorite = { toggleFavorite(it) },
-                            onTrash = { requestTrash(it) }
+                            onTrash = { requestTrash(it) },
+                            onRename = { item, name -> renameMedia(item, name) },
+                            onCopy = { copyMedia(it) },
+                            onTrashScreen = { loadTrash(); screen = Screen.TRASH }
                         )
                         Screen.SETTINGS -> SettingsScreen(
                             context = this,
@@ -95,6 +99,7 @@ class MainActivity : FragmentActivity() {
                             onVault = { screen = Screen.VAULT },
                             pinLock = pinLock
                         )
+                        Screen.TRASH -> TrashScreen(trashItems, { screen = Screen.GALLERY }, { restoreFromTrash(it) }, { requestDelete(it) })
                         Screen.VAULT -> VaultScreen(
                             context = this,
                             onBack = { screen = Screen.SETTINGS },
@@ -117,6 +122,31 @@ class MainActivity : FragmentActivity() {
             arrayOf(Manifest.permission.READ_MEDIA_IMAGES, Manifest.permission.READ_MEDIA_VIDEO)
         } else arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
         permissionLauncher.launch(permissions)
+    }
+
+    private fun loadTrash() {
+        lifecycleScope.launch { trashItems = runCatching { MediaRepository(contentResolver).loadTrashed() }.getOrDefault(emptyList()) }
+    }
+
+    private fun restoreFromTrash(selected: List<MediaItem>) {
+        if (selected.isEmpty() || Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return
+        val request = MediaStore.createTrashRequest(contentResolver, selected.map { it.uri }, false)
+        trashLauncher.launch(IntentSenderRequest.Builder(request.intentSender).build())
+    }
+
+    private fun renameMedia(item: MediaItem, newName: String) {
+        lifecycleScope.launch {
+            val ok = MediaOperations(contentResolver).rename(item.uri, newName)
+            Toast.makeText(this@MainActivity, if (ok) "Renamed" else "Rename failed", Toast.LENGTH_SHORT).show()
+            loadGallery()
+        }
+    }
+
+    private fun copyMedia(item: MediaItem) {
+        lifecycleScope.launch {
+            val ok = runCatching { MediaOperations(contentResolver).copyToPictures(item.uri, item.name, item.mimeType) }.getOrNull() != null
+            Toast.makeText(this@MainActivity, if (ok) "Copied to MS Gallery" else "Copy failed", Toast.LENGTH_SHORT).show()
+        }
     }
 
     private fun loadGallery() {
@@ -200,7 +230,10 @@ private fun GalleryScreen(
     onSettings: () -> Unit,
     onDelete: (List<MediaItem>) -> Unit,
     onFavorite: (List<MediaItem>) -> Unit,
-    onTrash: (List<MediaItem>) -> Unit
+    onTrash: (List<MediaItem>) -> Unit,
+    onRename: (MediaItem, String) -> Unit,
+    onCopy: (MediaItem) -> Unit,
+    onTrashScreen: () -> Unit
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     var query by rememberSaveable { mutableStateOf("") }
@@ -211,6 +244,7 @@ private fun GalleryScreen(
     var sortNewest by rememberSaveable { mutableStateOf(true) }
     var favoritesOnly by rememberSaveable { mutableStateOf(false) }
     var selectedIds by remember { mutableStateOf<Set<Long>>(emptySet()) }
+    var renameItem by remember { mutableStateOf<MediaItem?>(null) }
 
     val filtered = remember(items, query, videosOnly, sortNewest) {
         val base = MediaSearch().filter(items, query, videosOnly).filter { !favoritesOnly || it.isFavorite }
@@ -227,6 +261,8 @@ private fun GalleryScreen(
                 ) {
                     IconButton(onClick = { selectedIds = emptySet() }) { Icon(Icons.Default.Close, "Cancel selection") }
                     Text("${selectedIds.size} selected", modifier = Modifier.weight(1f))
+                    IconButton(onClick = { if (selectedItems.size == 1) renameItem = selectedItems.first() }) { Icon(Icons.Default.Edit, "Rename") }
+                    IconButton(onClick = { if (selectedItems.size == 1) onCopy(selectedItems.first()); selectedIds = emptySet() }) { Icon(Icons.Default.ContentCopy, "Copy") }
                     IconButton(onClick = { onFavorite(selectedItems); selectedIds = emptySet() }) {
                         Icon(Icons.Default.Favorite, "Toggle favorites")
                     }
@@ -255,6 +291,7 @@ private fun GalleryScreen(
                         Text(if (loading) "Scanning device…" else "${filtered.size} items")
                     }
                     IconButton(onClick = { showSearch = true }) { Icon(Icons.Default.Search, "Search") }
+                    IconButton(onClick = onTrashScreen) { Icon(Icons.Default.DeleteSweep, "Recently deleted") }
                     IconButton(onClick = onSettings) { Icon(Icons.Default.Settings, "Settings") }
                 }
             }
@@ -297,11 +334,65 @@ private fun GalleryScreen(
         }
     }
 
+    renameItem?.let { item ->
+        var name by remember(item) { mutableStateOf(item.name) }
+        AlertDialog(
+            onDismissRequest = { renameItem = null },
+            title = { Text("Rename media") },
+            text = { OutlinedTextField(value = name, onValueChange = { name = it }, singleLine = true) },
+            confirmButton = {
+                TextButton(onClick = { onRename(item, name); renameItem = null; selectedIds = emptySet() }) { Text("Save") }
+            },
+            dismissButton = { TextButton(onClick = { renameItem = null }) { Text("Cancel") } }
+        )
+    }
+
     selectedViewer?.let { item ->
         val viewerIndex = filtered.indexOfFirst { it.id == item.id }.coerceAtLeast(0)
         Dialog(onDismissRequest = { selectedViewer = null }) {
             Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
                 MediaPager(context, filtered, viewerIndex) { selectedViewer = null }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TrashScreen(
+    items: List<MediaItem>,
+    onBack: () -> Unit,
+    onRestore: (List<MediaItem>) -> Unit,
+    onDelete: (List<MediaItem>) -> Unit
+) {
+    var selected by remember { mutableStateOf<Set<Long>>(emptySet()) }
+    Scaffold(topBar = {
+        Row(Modifier.fillMaxWidth().padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, "Back") }
+            Text("Recently deleted", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
+            if (selected.isNotEmpty()) {
+                TextButton(onClick = { onRestore(items.filter { it.id in selected }); selected = emptySet() }) { Text("Restore") }
+                TextButton(onClick = { onDelete(items.filter { it.id in selected }); selected = emptySet() }) { Text("Delete") }
+            }
+        }
+    }) { padding ->
+        if (items.isEmpty()) {
+            Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) { Text("Trash is empty") }
+        } else {
+            LazyVerticalGrid(
+                columns = GridCells.Adaptive(128.dp),
+                modifier = Modifier.fillMaxSize().padding(padding),
+                contentPadding = PaddingValues(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(items, key = { it.id }) { item ->
+                    MediaTile(
+                        item = item,
+                        selected = item.id in selected,
+                        onClick = { selected = if (item.id in selected) selected - item.id else selected + item.id },
+                        onLongClick = { selected = selected + item.id }
+                    )
+                }
             }
         }
     }
