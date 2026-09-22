@@ -105,6 +105,7 @@ class CryptoDataSource(
         r.seek(5L + 1L + 4L)
 
         var plainStart = 0L
+        require(targetPosition < totalLength) { "Read position past end of vault" }
         while (true) {
             val header = ByteArray(4)
             if (r.read(header) != 4) error("Truncated vault chunk")
@@ -117,6 +118,7 @@ class CryptoDataSource(
             if (r.read(encrypted) != encrypted.size) error("Truncated vault chunk")
 
             val next = plainStart + plainLength
+            require(next <= totalLength) { "Invalid vault chunk bounds" }
             if (targetPosition < next) {
                 val cipher = Cipher.getInstance("AES/GCM/NoPadding").apply {
                     init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(CryptoEngine.TAG_BITS, iv))
@@ -143,8 +145,10 @@ class CryptoDataSource(
         while (r.filePointer < r.length()) {
             val plain = r.readInt()
             require(plain in 1..chunkSize) { "Invalid vault chunk length" }
-            r.skipBytes(CryptoEngine.IV_SIZE + plain + 16)
-            require(r.filePointer <= r.length()) { "Truncated vault chunk" }
+            val payloadBytes = CryptoEngine.IV_SIZE + plain + 16
+            val nextPosition = r.filePointer + payloadBytes
+            require(nextPosition <= r.length()) { "Truncated vault chunk" }
+            r.seek(nextPosition)
             total += plain
         }
         return total
