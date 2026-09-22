@@ -246,45 +246,77 @@ private fun GalleryScreen(
             } else if (filtered.isEmpty()) {
                 EmptyGallery(Modifier.fillMaxSize())
             } else {
+                TimelineGrid(
+                    items = filtered,
+                    selectedIds = selectedIds,
+                    onOpen = { selectedViewer = it },
+                    onSelect = { item ->
+                        selectedIds = if (item.id in selectedIds) selectedIds - item.id else selectedIds + item.id
+                    }
+                )
+
+            }
+        }
+    }
+
+    selectedViewer?.let { item ->
+        val viewerIndex = filtered.indexOfFirst { it.id == item.id }.coerceAtLeast(0)
+        Dialog(onDismissRequest = { selectedViewer = null }) {
+            Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
+                MediaPager(context, filtered, viewerIndex) { selectedViewer = null }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun TimelineGrid(
+    items: List<MediaItem>,
+    selectedIds: Set<Long>,
+    onOpen: (MediaItem) -> Unit,
+    onSelect: (MediaItem) -> Unit
+) {
+    val groups = remember(items) { items.groupBy { dayKey(it.dateTaken) }.toList() }
+    androidx.compose.foundation.lazy.LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(bottom = 20.dp)
+    ) {
+        groups.forEach { (day, media) ->
+            item(key = "header_$day") {
+                Text(
+                    day,
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.padding(start = 14.dp, top = 12.dp, bottom = 6.dp)
+                )
+            }
+            item(key = "grid_$day") {
                 LazyVerticalGrid(
                     columns = GridCells.Adaptive(128.dp),
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(8.dp),
+                    modifier = Modifier.fillMaxWidth().height(
+                        (((media.size + 2) / 3) * 144).coerceAtLeast(144).dp
+                    ),
+                    contentPadding = PaddingValues(horizontal = 8.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    userScrollEnabled = false
                 ) {
-                    items(filtered, key = { it.id }) { item ->
+                    items(media, key = { it.id }) { item ->
                         MediaTile(
                             item = item,
                             selected = item.id in selectedIds,
-                            onClick = {
-                                if (selectedIds.isNotEmpty()) {
-                                    selectedIds = if (item.id in selectedIds) selectedIds - item.id else selectedIds + item.id
-                                } else selectedViewer = item
-                            },
-                            onLongClick = { selectedIds = selectedIds + item.id }
+                            onClick = { if (selectedIds.isNotEmpty()) onSelect(item) else onOpen(item) },
+                            onLongClick = { onSelect(item) }
                         )
                     }
                 }
             }
         }
     }
-
-    selectedViewer?.let { item ->
-        Dialog(onDismissRequest = { selectedViewer = null }) {
-            Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
-                Box(Modifier.fillMaxSize()) {
-                    if (item.type == MediaType.IMAGE) ImageViewer(context, item.uri)
-                    else VideoViewer(context, item.uri)
-                    IconButton(
-                        onClick = { selectedViewer = null },
-                        modifier = Modifier.align(Alignment.TopEnd).padding(12.dp)
-                    ) { Icon(Icons.Default.Close, "Close viewer") }
-                }
-            }
-        }
-    }
 }
+
+private fun dayKey(time: Long): String =
+    SimpleDateFormat("EEEE, dd MMM yyyy", Locale.getDefault()).format(Date(time))
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
