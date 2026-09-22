@@ -13,7 +13,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.sidik.msgallery.security.BiometricAuth
-import com.sidik.msgallery.security.KeyManager
 import com.sidik.msgallery.security.VaultRepository
 
 @Composable
