@@ -52,7 +52,7 @@ fun SettingsScreen(
                 Button(
                     onClick = {
                         if (context is FragmentActivity && BiometricAuth.canAuthenticate(context)) {
-                            BiometricAuth.prompt(context)
+                            BiometricAuth.prompt(context) { }
                         }
                     }
                 ) {
