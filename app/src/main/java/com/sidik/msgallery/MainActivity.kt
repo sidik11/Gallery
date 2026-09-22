@@ -1,6 +1,7 @@
 package com.sidik.msgallery
 
 import android.Manifest
+import android.content.Intent
 import android.content.IntentSender
 import android.os.Build
 import android.os.Bundle
@@ -94,6 +95,8 @@ class MainActivity : FragmentActivity() {
                             onTrash = { requestTrash(it) },
                             onRename = { item, name -> renameMedia(item, name) },
                             onCopy = { copyMedia(it) },
+                            onCopyMany = { copyMediaMany(it) },
+                            onShare = { shareMedia(it) },
                             onTrashScreen = { loadTrash(); screen = Screen.TRASH },
                             onDetails = { detailItem = it; screen = Screen.DETAILS }
                         )
@@ -147,6 +150,29 @@ class MainActivity : FragmentActivity() {
             Toast.makeText(this@MainActivity, if (ok) "Renamed" else "Rename failed", Toast.LENGTH_SHORT).show()
             loadGallery()
         }
+    }
+
+    private fun copyMediaMany(selected: List<MediaItem>) {
+        if (selected.isEmpty()) return
+        lifecycleScope.launch {
+            val operations = MediaOperations(contentResolver)
+            val count = withContext(Dispatchers.IO) {
+                selected.count { runCatching { operations.copyToPictures(it.uri, it.name, it.mimeType) }.getOrNull() != null }
+            }
+            Toast.makeText(this@MainActivity, "Copied $count of ${selected.size}", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun shareMedia(selected: List<MediaItem>) {
+        if (selected.isEmpty()) return
+        val uris = ArrayList<android.net.Uri>(selected.size)
+        selected.forEach { uris.add(it.uri) }
+        val intent = Intent(Intent.ACTION_SEND_MULTIPLE).apply {
+            type = if (selected.all { it.type == MediaType.IMAGE }) "image/*" else if (selected.all { it.type == MediaType.VIDEO }) "video/*" else "*/*"
+            putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        startActivity(Intent.createChooser(intent, "Share media"))
     }
 
     private fun copyMedia(item: MediaItem) {
@@ -240,6 +266,8 @@ private fun GalleryScreen(
     onTrash: (List<MediaItem>) -> Unit,
     onRename: (MediaItem, String) -> Unit,
     onCopy: (MediaItem) -> Unit,
+    onCopyMany: (List<MediaItem>) -> Unit,
+    onShare: (List<MediaItem>) -> Unit,
     onTrashScreen: () -> Unit,
     onDetails: (MediaItem) -> Unit
 ) {
@@ -274,9 +302,11 @@ private fun GalleryScreen(
                 ) {
                     IconButton(onClick = { selectedIds = emptySet() }) { Icon(Icons.Default.Close, "Cancel selection") }
                     Text("${selectedIds.size} selected", modifier = Modifier.weight(1f))
+                    TextButton(onClick = { selectedIds = if (selectedIds.size == filtered.size) emptySet() else filtered.map { it.id }.toSet() }) { Text(if (selectedIds.size == filtered.size) "Clear all" else "Select all") }
                     IconButton(onClick = { if (selectedItems.size == 1) onDetails(selectedItems.first()) }) { Icon(Icons.Default.Info, "Details") }
                     IconButton(onClick = { if (selectedItems.size == 1) renameItem = selectedItems.first() }) { Icon(Icons.Default.Edit, "Rename") }
-                    IconButton(onClick = { if (selectedItems.size == 1) onCopy(selectedItems.first()); selectedIds = emptySet() }) { Icon(Icons.Default.ContentCopy, "Copy") }
+                    IconButton(onClick = { if (selectedItems.size == 1) onCopy(selectedItems.first()) else onCopyMany(selectedItems); selectedIds = emptySet() }) { Icon(Icons.Default.ContentCopy, "Copy") }
+                    IconButton(onClick = { onShare(selectedItems) }) { Icon(Icons.Default.Share, "Share") }
                     IconButton(onClick = { onFavorite(selectedItems); selectedIds = emptySet() }) {
                         Icon(Icons.Default.Favorite, "Toggle favorites")
                     }
