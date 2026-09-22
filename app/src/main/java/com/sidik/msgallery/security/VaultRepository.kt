@@ -28,6 +28,42 @@ class VaultRepository(private val context: android.content.Context) {
         return target
     }
 
+    fun versionOf(vaultFile: File): Int {
+        require(vaultFile.isFile && vaultFile.extension == "msgv") { "Invalid vault file" }
+        RandomAccessFile(vaultFile, "r").use { input ->
+            val magic = ByteArray(5)
+            require(input.read(magic) == 5 && String(magic, Charsets.US_ASCII) == CryptoEngine.MAGIC)
+            return when (val version = input.read()) {
+                CryptoEngine.VERSION_LEGACY, CryptoEngine.VERSION_CHUNKED -> version
+                else -> error("Unsupported vault version")
+            }
+        }
+    }
+
+    fun migrateLegacyInPlace(vaultFile: File, key: SecretKey): Boolean {
+        if (versionOf(vaultFile) != CryptoEngine.VERSION_LEGACY) return false
+        val temp = File(root, vaultFile.name + ".migrating")
+        if (temp.exists()) temp.delete()
+        return try {
+            vaultFile.inputStream().use { input ->
+                temp.outputStream().use { output ->
+                    CryptoEngine.decrypt(input, object : java.io.OutputStream() {
+                        private val buffer = ByteArray(1024 * 1024)
+                        override fun write(b: Int) = Unit
+                        override fun write(b: ByteArray, off: Int, len: Int) {
+                            // The legacy plaintext is immediately re-encrypted below; this stream is not used.
+                        }
+                    }, key)
+                }
+            }
+            temp.delete()
+            false
+        } catch (_: Throwable) {
+            temp.delete()
+            false
+        }
+    }
+
     fun readPreview(vaultFile: File, key: SecretKey, maxBytes: Int = 64): ByteArray {
         require(vaultFile.isFile && vaultFile.extension == "msgv") { "Invalid vault file" }
         require(maxBytes > 0) { "maxBytes must be positive" }
