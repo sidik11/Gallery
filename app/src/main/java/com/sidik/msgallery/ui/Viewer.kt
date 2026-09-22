@@ -72,7 +72,7 @@ fun ImageViewer(context: Context, uri: Uri) {
     var showInfo by remember { mutableStateOf(false) }
 
     LaunchedEffect(uri) {
-        bitmap = ThumbnailEngine(context.contentResolver).load(uri, 4096, 4096)
+        bitmap = ThumbnailEngine(context.contentResolver).load(uri, 2048, 2048)
     }
 
     Box(Modifier.fillMaxSize().background(Color.Black)) {
