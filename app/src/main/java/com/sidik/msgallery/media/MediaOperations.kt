@@ -41,22 +41,41 @@ class MediaOperations(private val resolver: ContentResolver) {
     suspend fun removeExif(uri: Uri): Boolean = withContext(Dispatchers.IO) {
         val mime = resolver.getType(uri) ?: return@withContext false
         if (!mime.startsWith("image/")) return@withContext false
-        val temp = kotlin.io.path.createTempFile("ms_exif_", ".jpg").toFile()
-        try {
-            resolver.openInputStream(uri)?.use { input -> temp.outputStream().use { input.copyTo(it) } } ?: return@withContext false
-            val exif = ExifInterface(temp)
-            exif.setAttribute(ExifInterface.TAG_GPS_LATITUDE, null)
-            exif.setAttribute(ExifInterface.TAG_GPS_LONGITUDE, null)
-            exif.setAttribute(ExifInterface.TAG_GPS_LATITUDE_REF, null)
-            exif.setAttribute(ExifInterface.TAG_GPS_LONGITUDE_REF, null)
-            exif.setAttribute(ExifInterface.TAG_MAKE, null)
-            exif.setAttribute(ExifInterface.TAG_MODEL, null)
-            exif.saveAttributes()
-            val values = ContentValues().apply { put(MediaStore.MediaColumns.IS_PENDING, 1) }
-            resolver.update(uri, values, null, null)
-            resolver.openOutputStream(uri, "wt")?.use { out -> temp.inputStream().use { it.copyTo(out) } } ?: return@withContext false
-            resolver.update(uri, ContentValues().apply { put(MediaStore.MediaColumns.IS_PENDING, 0) }, null, null)
-            true
-        } catch (_: Throwable) { false } finally { temp.delete() }
+        if (mime.equals("image/gif", ignoreCase = true) || mime.equals("image/svg+xml", ignoreCase = true)) {
+            return@withContext false
+        }
+
+        val descriptor = runCatching {
+            resolver.openFileDescriptor(uri, "rw")
+        }.getOrNull() ?: return@withContext false
+
+        descriptor.use { pfd ->
+            runCatching {
+                val exif = ExifInterface(pfd.fileDescriptor)
+                val tags = arrayOf(
+                    ExifInterface.TAG_GPS_LATITUDE,
+                    ExifInterface.TAG_GPS_LONGITUDE,
+                    ExifInterface.TAG_GPS_LATITUDE_REF,
+                    ExifInterface.TAG_GPS_LONGITUDE_REF,
+                    ExifInterface.TAG_GPS_DEST_LATITUDE,
+                    ExifInterface.TAG_GPS_DEST_LONGITUDE,
+                    ExifInterface.TAG_GPS_DEST_LATITUDE_REF,
+                    ExifInterface.TAG_GPS_DEST_LONGITUDE_REF,
+                    ExifInterface.TAG_MAKE,
+                    ExifInterface.TAG_MODEL,
+                    ExifInterface.TAG_SOFTWARE,
+                    ExifInterface.TAG_ARTIST,
+                    ExifInterface.TAG_COPYRIGHT,
+                    ExifInterface.TAG_USER_COMMENT,
+                    ExifInterface.TAG_IMAGE_DESCRIPTION,
+                    ExifInterface.TAG_DATETIME,
+                    ExifInterface.TAG_DATETIME_ORIGINAL,
+                    ExifInterface.TAG_DATETIME_DIGITIZED
+                )
+                tags.forEach { exif.setAttribute(it, null) }
+                exif.saveAttributes()
+                true
+            }.getOrDefault(false)
+        }
     }
 }
