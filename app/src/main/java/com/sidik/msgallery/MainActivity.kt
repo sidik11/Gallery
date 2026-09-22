@@ -503,38 +503,28 @@ private fun TimelineGrid(
     onSelect: (MediaItem) -> Unit
 ) {
     val groups = remember(items) { items.groupBy { dayKey(it.dateTaken) }.toList() }
-    androidx.compose.foundation.lazy.LazyColumn(
+    LazyVerticalGrid(
+        columns = GridCells.Adaptive(128.dp),
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(bottom = 20.dp)
+        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         groups.forEach { (day, media) ->
-            item(key = "header_$day") {
+            item(key = "header_$day", span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }) {
                 Text(
                     day,
                     style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.padding(start = 14.dp, top = 12.dp, bottom = 6.dp)
+                    modifier = Modifier.padding(start = 6.dp, top = 8.dp, bottom = 2.dp)
                 )
             }
-            item(key = "grid_$day") {
-                LazyVerticalGrid(
-                    columns = GridCells.Adaptive(128.dp),
-                    modifier = Modifier.fillMaxWidth().height(
-                        (((media.size + 2) / 3) * 144).coerceAtLeast(144).dp
-                    ),
-                    contentPadding = PaddingValues(horizontal = 8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                    userScrollEnabled = false
-                ) {
-                    items(media, key = { it.id }) { item ->
-                        MediaTile(
-                            item = item,
-                            selected = item.id in selectedIds,
-                            onClick = { if (selectedIds.isNotEmpty()) onSelect(item) else onOpen(item) },
-                            onLongClick = { onSelect(item) }
-                        )
-                    }
-                }
+            items(media, key = { it.id }) { item ->
+                MediaTile(
+                    item = item,
+                    selected = item.id in selectedIds,
+                    onClick = { if (selectedIds.isNotEmpty()) onSelect(item) else onOpen(item) },
+                    onLongClick = { onSelect(item) }
+                )
             }
         }
     }
