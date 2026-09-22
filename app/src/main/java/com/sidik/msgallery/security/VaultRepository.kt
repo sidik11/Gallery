@@ -66,7 +66,12 @@ class VaultRepository(private val context: android.content.Context) {
                     val cipher = Cipher.getInstance("AES/GCM/NoPadding").apply {
                         init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(CryptoEngine.TAG_BITS, iv))
                     }
-                    CipherInputStream(input, cipher).use { it.readNBytes(maxBytes) }
+                    val encrypted = input.readBytes()
+                    try {
+                        cipher.doFinal(encrypted).copyOf(minOf(maxBytes, encrypted.size))
+                    } finally {
+                        encrypted.fill(0)
+                    }
                 }
                 else -> error("Unsupported vault version")
             }
