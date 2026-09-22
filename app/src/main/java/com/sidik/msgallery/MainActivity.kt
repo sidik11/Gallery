@@ -24,6 +24,7 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -75,6 +76,7 @@ class MainActivity : FragmentActivity() {
     private var screen by mutableStateOf(Screen.GALLERY)
     private var detailItem by mutableStateOf<MediaItem?>(null)
     private var leftForeground = false
+    private var themeMode by mutableStateOf("system")
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -83,7 +85,7 @@ class MainActivity : FragmentActivity() {
         requestMediaAccess()
         if (pinLock.isEnabled()) screen = Screen.LOCK
         setContent {
-            GalleryTheme {
+            GalleryTheme(themeMode) {
                 Surface(Modifier.fillMaxSize()) {
                     when (screen) {
                         Screen.LOCK -> LockScreen(pinLock) { screen = Screen.GALLERY }
@@ -106,7 +108,9 @@ class MainActivity : FragmentActivity() {
                             onBack = { screen = Screen.GALLERY },
                             onVault = { screen = Screen.VAULT },
                             onStorage = { screen = Screen.STORAGE },
-                            pinLock = pinLock
+                            pinLock = pinLock,
+                            themeMode = themeMode,
+                            onThemeModeChange = { themeMode = it }
                         )
                         Screen.TRASH -> TrashScreen(trashItems, { screen = Screen.GALLERY }, { restoreFromTrash(it) }, { requestDelete(it) })
                         Screen.STORAGE -> StorageAnalyzerScreen(items, contentResolver) { screen = Screen.SETTINGS }
@@ -114,7 +118,8 @@ class MainActivity : FragmentActivity() {
                         Screen.VAULT -> VaultScreen(
                             context = this,
                             onBack = { screen = Screen.SETTINGS },
-                            onImport = { vaultFileLauncher.launch(arrayOf("*/*")) }
+                            onImport = { vaultFileLauncher.launch(arrayOf("image/*", "video/*")) },
+                            pinLock = pinLock
                         )
                     }
                 }
@@ -264,8 +269,17 @@ class MainActivity : FragmentActivity() {
 }
 
 @Composable
-private fun GalleryTheme(content: @Composable () -> Unit) {
-    MaterialTheme(colorScheme = darkColorScheme(), content = content)
+private fun GalleryTheme(themeMode: String, content: @Composable () -> Unit) {
+    val systemDark = isSystemInDarkTheme()
+    val dark = when (themeMode) {
+        "light" -> false
+        "dark" -> true
+        else -> systemDark
+    }
+    MaterialTheme(
+        colorScheme = if (dark) darkColorScheme() else lightColorScheme(),
+        content = content
+    )
 }
 
 @OptIn(ExperimentalFoundationApi::class)
