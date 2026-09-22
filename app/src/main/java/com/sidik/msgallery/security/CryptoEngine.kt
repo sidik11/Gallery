@@ -20,7 +20,6 @@ object CryptoEngine {
     fun encrypt(input: InputStream, output: OutputStream, key: ByteArray) = encrypt(input, output, SecretKeySpec(key, "AES"))
 
     fun encrypt(input: InputStream, output: OutputStream, key: SecretKey) {
-        require(key.size == 32)
         val iv = ByteArray(IV_SIZE).also { SecureRandom().nextBytes(it) }
         output.write(MAGIC.toByteArray(Charsets.US_ASCII))
         output.write(byteArrayOf(1))
