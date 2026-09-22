@@ -40,7 +40,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-private enum class Screen { GALLERY, SETTINGS, VAULT, TRASH, STORAGE, LOCK }
+private enum class Screen { GALLERY, SETTINGS, VAULT, TRASH, STORAGE, DETAILS, LOCK }
 private enum class GalleryMode { PHOTOS, ALBUMS }
 
 class MainActivity : FragmentActivity() {
@@ -70,6 +70,7 @@ class MainActivity : FragmentActivity() {
     private var loading by mutableStateOf(true)
     private val pinLock by lazy { PinLockManager(this) }
     private var screen by mutableStateOf(Screen.GALLERY)
+    private var detailItem by mutableStateOf<MediaItem?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -91,7 +92,8 @@ class MainActivity : FragmentActivity() {
                             onTrash = { requestTrash(it) },
                             onRename = { item, name -> renameMedia(item, name) },
                             onCopy = { copyMedia(it) },
-                            onTrashScreen = { loadTrash(); screen = Screen.TRASH }
+                            onTrashScreen = { loadTrash(); screen = Screen.TRASH },
+                            onDetails = { detailItem = it; screen = Screen.DETAILS }
                         )
                         Screen.SETTINGS -> SettingsScreen(
                             context = this,
@@ -102,6 +104,7 @@ class MainActivity : FragmentActivity() {
                         )
                         Screen.TRASH -> TrashScreen(trashItems, { screen = Screen.GALLERY }, { restoreFromTrash(it) }, { requestDelete(it) })
                         Screen.STORAGE -> StorageAnalyzerScreen(items, contentResolver) { screen = Screen.SETTINGS }
+                        Screen.DETAILS -> detailItem?.let { MediaDetailsScreen(it, contentResolver, { screen = Screen.GALLERY }, { loadGallery() }) }
                         Screen.VAULT -> VaultScreen(
                             context = this,
                             onBack = { screen = Screen.SETTINGS },
@@ -235,7 +238,8 @@ private fun GalleryScreen(
     onTrash: (List<MediaItem>) -> Unit,
     onRename: (MediaItem, String) -> Unit,
     onCopy: (MediaItem) -> Unit,
-    onTrashScreen: () -> Unit
+    onTrashScreen: () -> Unit,
+    onDetails: (MediaItem) -> Unit
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     var query by rememberSaveable { mutableStateOf("") }
@@ -263,6 +267,7 @@ private fun GalleryScreen(
                 ) {
                     IconButton(onClick = { selectedIds = emptySet() }) { Icon(Icons.Default.Close, "Cancel selection") }
                     Text("${selectedIds.size} selected", modifier = Modifier.weight(1f))
+                    IconButton(onClick = { if (selectedItems.size == 1) onDetails(selectedItems.first()) }) { Icon(Icons.Default.Info, "Details") }
                     IconButton(onClick = { if (selectedItems.size == 1) renameItem = selectedItems.first() }) { Icon(Icons.Default.Edit, "Rename") }
                     IconButton(onClick = { if (selectedItems.size == 1) onCopy(selectedItems.first()); selectedIds = emptySet() }) { Icon(Icons.Default.ContentCopy, "Copy") }
                     IconButton(onClick = { onFavorite(selectedItems); selectedIds = emptySet() }) {
