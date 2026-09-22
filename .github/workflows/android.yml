@@ -35,3 +35,6 @@ jobs:
 
       - name: Debug APK
         run: gradle assembleDebug
+
+      - name: Release APK
+        run: gradle assembleRelease
