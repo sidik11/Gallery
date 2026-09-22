@@ -19,7 +19,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.media3.common.MediaItem as PlayerMediaItem
-import androidx.media3.datasource.ByteArrayDataSource
 import androidx.media3.datasource.DataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
@@ -142,11 +141,16 @@ private fun VaultItemViewer(
     LaunchedEffect(file) {
         runCatching {
             withContext(Dispatchers.IO) {
-                repository.decryptToMemory(file, keyManager.getOrCreateVaultKey())
+                val key = keyManager.getOrCreateVaultKey()
+                val preview = repository.readPreview(file, key)
+                val detected = detectType(preview)
+                if (detected == VaultType.IMAGE) {
+                    data = repository.decryptToMemory(file, key)
+                }
+                detected
             }
         }.onSuccess {
-            data = it
-            type = detectType(it)
+            type = it
         }.onFailure {
             error = "Unable to decrypt vault item"
         }
@@ -167,7 +171,7 @@ private fun VaultItemViewer(
                     )
                     data == null -> CircularProgressIndicator(Modifier.align(Alignment.Center))
                     type == VaultType.IMAGE -> VaultImageViewer(data!!)
-                    type == VaultType.VIDEO -> VaultVideoViewer(data!!)
+                    type == VaultType.VIDEO -> VaultVideoViewer(file, keyManager)
                     else -> Text(
                         "Unsupported or unknown media format",
                         color = Color.White,
@@ -206,14 +210,15 @@ private fun VaultImageViewer(bytes: ByteArray) {
 }
 
 @Composable
-private fun VaultVideoViewer(bytes: ByteArray) {
+private fun VaultVideoViewer(file: File, keyManager: KeyManager) {
     val context = androidx.compose.ui.platform.LocalContext.current
-    val player = remember(bytes) {
+    val player = remember(file) {
         val factory = object : DataSource.Factory {
-            override fun createDataSource(): DataSource = ByteArrayDataSource(bytes)
+            override fun createDataSource(): DataSource =
+                CryptoDataSource(file, keyManager.getOrCreateVaultKey())
         }
         val mediaSource = ProgressiveMediaSource.Factory(factory)
-            .createMediaSource(PlayerMediaItem.fromUri("memory://ms-gallery-vault"))
+            .createMediaSource(PlayerMediaItem.fromUri("vault://encrypted/" + file.name))
         ExoPlayer.Builder(context).build().apply {
             setMediaSource(mediaSource)
             prepare()
