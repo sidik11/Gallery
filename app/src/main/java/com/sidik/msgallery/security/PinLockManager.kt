@@ -15,6 +15,7 @@ import javax.crypto.SecretKeyFactory
 import javax.crypto.spec.GCMParameterSpec
 import javax.crypto.spec.PBEKeySpec
 import javax.crypto.spec.SecretKeySpec
+import kotlinx.coroutines.delay
 
 /**
  * Persistent app-lock configuration.
@@ -33,9 +34,14 @@ class PinLockManager(private val context: Context) {
         const val ITERATIONS = 210_000
         const val IV_BYTES = 12
         const val TAG_BITS = 128
+        const val MAX_FAILURES = 5
+        const val MAX_DELAY_MS = 30_000L
     }
 
     private val file get() = File(context.filesDir, FILE_NAME)
+
+    @Volatile
+    private var failedAttempts = 0
 
     fun isEnabled(): Boolean = file.exists()
 
@@ -60,6 +66,7 @@ class PinLockManager(private val context: Context) {
                 out.write(iv)
                 out.write(encrypted)
             }
+            failedAttempts = 0
         } finally {
             pin.fill('\u0000')
             verifier.fill(0)
@@ -67,6 +74,35 @@ class PinLockManager(private val context: Context) {
             plain.fill(0)
         }
     }
+
+    /**
+     * Checks the PIN with exponential UI-safe throttling.
+     *
+     * Delays are applied only after failed attempts and are suspendable, so
+     * the Compose main thread is never blocked by Thread.sleep().
+     */
+    suspend fun verifyWithThrottle(pin: CharArray): Boolean {
+        val attempt = failedAttempts
+        if (attempt > 0) {
+            val delayMs = (1_000L shl (attempt - 1).coerceAtMost(5))
+                .coerceAtMost(MAX_DELAY_MS)
+            delay(delayMs)
+        }
+
+        val valid = verify(pin)
+        if (valid) {
+            failedAttempts = 0
+        } else {
+            failedAttempts = (failedAttempts + 1).coerceAtMost(MAX_FAILURES)
+        }
+        return valid
+    }
+
+    fun resetThrottle() {
+        failedAttempts = 0
+    }
+
+    fun isThrottled(): Boolean = failedAttempts > 0
 
     fun verify(pin: CharArray): Boolean {
         if (!isEnabled()) {
@@ -117,6 +153,7 @@ class PinLockManager(private val context: Context) {
 
     fun disable() {
         file.delete()
+        failedAttempts = 0
     }
 
     private fun validatePin(pin: CharArray) {
