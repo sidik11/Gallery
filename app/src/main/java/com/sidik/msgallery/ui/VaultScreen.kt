@@ -176,7 +176,6 @@ private fun VaultItemViewer(
                     loading -> CircularProgressIndicator(Modifier.align(Alignment.Center))
                     type == VaultType.IMAGE && data != null -> VaultImageViewer(data!!)
                     type == VaultType.VIDEO -> VaultVideoViewer(file, keyManager)
-                    type == VaultType.VIDEO -> VaultVideoViewer(file, keyManager)
                     else -> Text(
                         "Unsupported or unknown media format",
                         color = Color.White,
