@@ -54,7 +54,7 @@ fun MediaPager(
             color = Color.Black.copy(alpha = 0.65f),
             shape = MaterialTheme.shapes.medium
         ) {
-            Text("$"+"{pagerState.currentPage + 1} / $"+"{items.size}", color = Color.White,
+            Text("${pagerState.currentPage + 1} / ${items.size}", color = Color.White,
                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp))
         }
         IconButton(onClick = onDismiss, modifier = Modifier.align(Alignment.TopEnd).padding(10.dp)) {
