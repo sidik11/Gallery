@@ -277,7 +277,7 @@ private fun GalleryScreen(
     var selectedViewer by remember { mutableStateOf<MediaItem?>(null) }
     var showSearch by rememberSaveable { mutableStateOf(false) }
     var mode by rememberSaveable { mutableStateOf(GalleryMode.PHOTOS) }
-    var sortNewest by rememberSaveable { mutableStateOf(true) }
+    var sortMode by rememberSaveable { mutableStateOf("newest") }
     var favoritesOnly by rememberSaveable { mutableStateOf(false) }
     var showAdvancedFilter by rememberSaveable { mutableStateOf(false) }
     var mediaFilter by remember { mutableStateOf(MediaFilter()) }
@@ -287,9 +287,15 @@ private fun GalleryScreen(
     val effectiveFilter = remember(mediaFilter, videosOnly) {
         if (videosOnly) mediaFilter.copy(type = MediaType.VIDEO) else mediaFilter
     }
-    val filtered = remember(items, query, effectiveFilter, favoritesOnly, sortNewest) {
+    val filtered = remember(items, query, effectiveFilter, favoritesOnly, sortMode) {
         val base = MediaSearch().filter(items, query, effectiveFilter).filter { !favoritesOnly || it.isFavorite }
-        if (sortNewest) base.sortedByDescending { it.dateTaken } else base.sortedBy { it.name.lowercase(Locale.getDefault()) }
+        when (sortMode) {
+            "oldest" -> base.sortedBy { it.dateTaken }
+            "largest" -> base.sortedByDescending { it.sizeBytes }
+            "smallest" -> base.sortedBy { it.sizeBytes }
+            "name" -> base.sortedBy { it.name.lowercase(Locale.getDefault()) }
+            else -> base.sortedByDescending { it.dateTaken }
+        }
     }
     val selectedItems = remember(selectedIds, items) { items.filter { it.id in selectedIds } }
 
@@ -353,7 +359,11 @@ private fun GalleryScreen(
                     FilterChip(mode == GalleryMode.ALBUMS, { mode = GalleryMode.ALBUMS }, label = { Text("Albums") })
                     FilterChip(videosOnly, { videosOnly = !videosOnly }, label = { Text("Videos") })
                     FilterChip(favoritesOnly, { favoritesOnly = !favoritesOnly }, label = { Text("Favorites") })
-                    FilterChip(sortNewest, { sortNewest = !sortNewest }, label = { Text(if (sortNewest) "Newest" else "Name") })
+                    FilterChip(sortMode == "newest", { sortMode = "newest" }, label = { Text("Newest") })
+                FilterChip(sortMode == "oldest", { sortMode = "oldest" }, label = { Text("Oldest") })
+                FilterChip(sortMode == "largest", { sortMode = "largest" }, label = { Text("Largest") })
+                FilterChip(sortMode == "smallest", { sortMode = "smallest" }, label = { Text("Smallest") })
+                FilterChip(sortMode == "name", { sortMode = "name" }, label = { Text("Name") })
                 }
             }
 
