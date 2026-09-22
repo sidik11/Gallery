@@ -34,6 +34,9 @@ android {
     }
     testOptions {
         unitTests.isReturnDefaultValues = true
+        unitTests.all {
+            it.jvmArgs("-XX:+EnableDynamicAgentLoading")
+        }
     }
     packaging { resources.excludes += "/META-INF/{AL2.0,LGPL2.1}" }
 }

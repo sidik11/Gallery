@@ -1,0 +1,6 @@
+{
+  "name": "MS Gallery",
+  "description": "Secure gallery application with encrypted vault, biometric auth, and duplicate cleaner",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

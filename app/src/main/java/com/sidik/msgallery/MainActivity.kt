@@ -14,6 +14,8 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -379,7 +381,7 @@ private fun GalleryScreen(
         Column(Modifier.fillMaxSize().padding(padding)) {
             if (!loading) {
                 Row(
-                    Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
+                    Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 4.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     FilterChip(mode == GalleryMode.PHOTOS, { mode = GalleryMode.PHOTOS }, label = { Text("Photos") })
@@ -387,10 +389,10 @@ private fun GalleryScreen(
                     FilterChip(videosOnly, { videosOnly = !videosOnly }, label = { Text("Videos") })
                     FilterChip(favoritesOnly, { favoritesOnly = !favoritesOnly }, label = { Text("Favorites") })
                     FilterChip(sortMode == "newest", { sortMode = "newest" }, label = { Text("Newest") })
-                FilterChip(sortMode == "oldest", { sortMode = "oldest" }, label = { Text("Oldest") })
-                FilterChip(sortMode == "largest", { sortMode = "largest" }, label = { Text("Largest") })
-                FilterChip(sortMode == "smallest", { sortMode = "smallest" }, label = { Text("Smallest") })
-                FilterChip(sortMode == "name", { sortMode = "name" }, label = { Text("Name") })
+                    FilterChip(sortMode == "oldest", { sortMode = "oldest" }, label = { Text("Oldest") })
+                    FilterChip(sortMode == "largest", { sortMode = "largest" }, label = { Text("Largest") })
+                    FilterChip(sortMode == "smallest", { sortMode = "smallest" }, label = { Text("Smallest") })
+                    FilterChip(sortMode == "name", { sortMode = "name" }, label = { Text("Name") })
                 }
             }
 
