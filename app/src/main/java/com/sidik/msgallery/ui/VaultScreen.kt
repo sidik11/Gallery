@@ -24,6 +24,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
 import androidx.media3.ui.PlayerView
 import com.sidik.msgallery.security.BiometricAuth
+import com.sidik.msgallery.security.CryptoDataSource
 import com.sidik.msgallery.security.KeyManager
 import com.sidik.msgallery.security.VaultRepository
 import kotlinx.coroutines.Dispatchers
@@ -136,6 +137,7 @@ private fun VaultItemViewer(
 ) {
     var data by remember(file) { mutableStateOf<ByteArray?>(null) }
     var type by remember(file) { mutableStateOf(VaultType.UNKNOWN) }
+    var loading by remember(file) { mutableStateOf(true) }
     var error by remember(file) { mutableStateOf<String?>(null) }
 
     LaunchedEffect(file) {
@@ -151,8 +153,10 @@ private fun VaultItemViewer(
             }
         }.onSuccess {
             type = it
+            loading = false
         }.onFailure {
             error = "Unable to decrypt vault item"
+            loading = false
         }
     }
 
@@ -169,8 +173,9 @@ private fun VaultItemViewer(
                         color = Color.White,
                         modifier = Modifier.align(Alignment.Center)
                     )
-                    data == null -> CircularProgressIndicator(Modifier.align(Alignment.Center))
-                    type == VaultType.IMAGE -> VaultImageViewer(data!!)
+                    loading -> CircularProgressIndicator(Modifier.align(Alignment.Center))
+                    type == VaultType.IMAGE && data != null -> VaultImageViewer(data!!)
+                    type == VaultType.VIDEO -> VaultVideoViewer(file, keyManager)
                     type == VaultType.VIDEO -> VaultVideoViewer(file, keyManager)
                     else -> Text(
                         "Unsupported or unknown media format",
