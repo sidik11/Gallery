@@ -3,6 +3,7 @@ package com.sidik.msgallery
 import android.Manifest
 import android.os.Build
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -36,16 +37,31 @@ import com.sidik.msgallery.media.MediaRepository
 import com.sidik.msgallery.media.MediaSearch
 import com.sidik.msgallery.media.MediaType
 import com.sidik.msgallery.media.ThumbnailEngine
+import com.sidik.msgallery.security.KeyManager
 import com.sidik.msgallery.security.SecureWindow
+import com.sidik.msgallery.security.VaultRepository
 import com.sidik.msgallery.ui.ImageViewer
+import com.sidik.msgallery.ui.SettingsScreen
+import com.sidik.msgallery.ui.VaultScreen
 import com.sidik.msgallery.ui.VideoViewer
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+
+private enum class Screen { GALLERY, SETTINGS, VAULT }
 
 class MainActivity : FragmentActivity() {
     private val permissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { loadGallery() }
+
+    private val vaultFileLauncher =
+        registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+            if (uri != null) encryptSelectedFile(uri)
+        }
+
     private var items by mutableStateOf<List<MediaItem>>(emptyList())
     private var loading by mutableStateOf(true)
+    private var screen by mutableStateOf(Screen.GALLERY)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -55,7 +71,23 @@ class MainActivity : FragmentActivity() {
         setContent {
             GalleryTheme {
                 Surface(Modifier.fillMaxSize()) {
-                    GalleryScreen(items = items, loading = loading)
+                    when (screen) {
+                        Screen.GALLERY -> GalleryScreen(
+                            items = items,
+                            loading = loading,
+                            onSettings = { screen = Screen.SETTINGS }
+                        )
+                        Screen.SETTINGS -> SettingsScreen(
+                            context = this,
+                            onBack = { screen = Screen.GALLERY },
+                            onVault = { screen = Screen.VAULT }
+                        )
+                        Screen.VAULT -> VaultScreen(
+                            context = this,
+                            onBack = { screen = Screen.SETTINGS },
+                            onImport = { vaultFileLauncher.launch(arrayOf("*/*")) }
+                        )
+                    }
                 }
             }
         }
@@ -63,13 +95,15 @@ class MainActivity : FragmentActivity() {
 
     override fun onResume() {
         super.onResume()
-        if (!loading) loadGallery()
+        if (!loading && screen == Screen.GALLERY) loadGallery()
     }
 
     private fun requestMediaAccess() {
         val permissions = if (Build.VERSION.SDK_INT >= 33) {
             arrayOf(Manifest.permission.READ_MEDIA_IMAGES, Manifest.permission.READ_MEDIA_VIDEO)
-        } else arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
+        } else {
+            arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
+        }
         permissionLauncher.launch(permissions)
     }
 
@@ -78,6 +112,38 @@ class MainActivity : FragmentActivity() {
             loading = true
             items = runCatching { MediaRepository(contentResolver).loadAll() }.getOrDefault(emptyList())
             loading = false
+        }
+    }
+
+    private fun encryptSelectedFile(uri: android.net.Uri) {
+        lifecycleScope.launch {
+            val result = runCatching {
+                val name = contentResolver.query(
+                    uri,
+                    arrayOf(android.provider.OpenableColumns.DISPLAY_NAME),
+                    null,
+                    null,
+                    null
+                )?.use { cursor ->
+                    val index = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                    if (index >= 0 && cursor.moveToFirst()) cursor.getString(index) else "media.bin"
+                } ?: "media.bin"
+
+                withContext(Dispatchers.IO) {
+                    contentResolver.openInputStream(uri)?.use { input ->
+                        VaultRepository(this@MainActivity).importEncrypted(
+                            input,
+                            name,
+                            KeyManager().getOrCreateVaultKey()
+                        )
+                    } ?: error("Unable to read selected file")
+                }
+            }
+            Toast.makeText(
+                this@MainActivity,
+                if (result.isSuccess) "Encrypted file added to vault" else "Vault import failed",
+                Toast.LENGTH_SHORT
+            ).show()
         }
     }
 }
@@ -89,12 +155,17 @@ private fun GalleryTheme(content: @Composable () -> Unit) {
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun GalleryScreen(items: List<MediaItem>, loading: Boolean) {
+private fun GalleryScreen(
+    items: List<MediaItem>,
+    loading: Boolean,
+    onSettings: () -> Unit
+) {
     val context = androidx.compose.ui.platform.LocalContext.current
     var query by rememberSaveable { mutableStateOf("") }
     var videosOnly by rememberSaveable { mutableStateOf(false) }
     var selected by remember { mutableStateOf<MediaItem?>(null) }
     var showSearch by rememberSaveable { mutableStateOf(false) }
+
     val filtered = remember(items, query, videosOnly) {
         MediaSearch().filter(items, query, videosOnly)
     }
@@ -134,7 +205,7 @@ private fun GalleryScreen(items: List<MediaItem>, loading: Boolean) {
                         IconButton(onClick = { showSearch = true }) {
                             Icon(Icons.Default.Search, "Search")
                         }
-                        IconButton(onClick = { }) {
+                        IconButton(onClick = onSettings) {
                             Icon(Icons.Default.Settings, "Settings")
                         }
                     }
@@ -148,8 +219,16 @@ private fun GalleryScreen(items: List<MediaItem>, loading: Boolean) {
                     Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    FilterChip(!videosOnly, { videosOnly = false }, label = { Text("All") })
-                    FilterChip(videosOnly, { videosOnly = true }, label = { Text("Videos") })
+                    FilterChip(
+                        selected = !videosOnly,
+                        onClick = { videosOnly = false },
+                        label = { Text("All") }
+                    )
+                    FilterChip(
+                        selected = videosOnly,
+                        onClick = { videosOnly = true },
+                        label = { Text("Videos") }
+                    )
                 }
             }
 
@@ -175,10 +254,7 @@ private fun GalleryScreen(items: List<MediaItem>, loading: Boolean) {
 
     selected?.let { item ->
         Dialog(onDismissRequest = { selected = null }) {
-            Surface(
-                modifier = Modifier.fillMaxSize(),
-                color = MaterialTheme.colorScheme.surface
-            ) {
+            Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
                 Box(Modifier.fillMaxSize()) {
                     if (item.type == MediaType.IMAGE) {
                         ImageViewer(context, item.uri)
