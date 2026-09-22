@@ -12,6 +12,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.sidik.msgallery.security.PinLockManager
+import kotlinx.coroutines.launch
 
 @Composable
 fun LockScreen(
@@ -20,6 +21,8 @@ fun LockScreen(
 ) {
     var pin by remember { mutableStateOf("") }
     var error by remember { mutableStateOf(false) }
+    var checking by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
 
     Column(
         modifier = Modifier.fillMaxSize().padding(28.dp),
@@ -36,22 +39,31 @@ fun LockScreen(
                 }
             },
             singleLine = true,
+            enabled = !checking,
             visualTransformation = PasswordVisualTransformation(),
             label = { Text("PIN") }
         )
-        if (error) Text("Incorrect PIN")
+        if (error) Text("Incorrect PIN. Please wait before trying again.")
         Button(
-            enabled = pin.length >= 4,
+            enabled = pin.length >= 4 && !checking,
             onClick = {
-                if (manager.verify(pin.toCharArray())) {
-                    pin = ""
-                    onUnlocked()
-                } else {
-                    error = true
+                val entered = pin
+                checking = true
+                error = false
+                scope.launch {
+                    val valid = manager.verifyWithThrottle(entered.toCharArray())
+                    checking = false
+                    if (valid) {
+                        pin = ""
+                        onUnlocked()
+                    } else {
+                        pin = ""
+                        error = true
+                    }
                 }
             }
         ) {
-            Text("Unlock")
+            Text(if (checking) "Checking…" else "Unlock")
         }
     }
 }
