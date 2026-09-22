@@ -1,9 +1,10 @@
 package com.sidik.msgallery.media
 
 import android.net.Uri
-import org.mockito.Mockito.mock
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.mockito.Mockito.mock
 
 class MediaSearchTest {
     private val items = listOf(
@@ -20,6 +21,15 @@ class MediaSearchTest {
     }
 
     @Test fun videoFilterReturnsOnlyVideos() {
-        assertEquals(1, MediaSearch().filter(items, "", videosOnly = true).single().id)
+        val result = MediaSearch().filter(
+            items = items,
+            query = "",
+            filter = MediaFilter(type = MediaType.VIDEO)
+        )
+
+        assertEquals(1, result.size)
+        assertEquals(MediaType.VIDEO, result.single().type)
+        assertEquals(2L, result.single().id)
+        assertTrue(result.single().name.endsWith(".mp4"))
     }
 }
