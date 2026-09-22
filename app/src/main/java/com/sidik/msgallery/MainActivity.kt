@@ -48,7 +48,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-private enum class Screen { GALLERY, SETTINGS, VAULT }
+private enum class Screen { GALLERY, SETTINGS, VAULT, LOCK }
 
 class MainActivity : FragmentActivity() {
     private val permissionLauncher =
@@ -61,6 +61,7 @@ class MainActivity : FragmentActivity() {
 
     private var items by mutableStateOf<List<MediaItem>>(emptyList())
     private var loading by mutableStateOf(true)
+    private val pinLock by lazy { com.sidik.msgallery.security.PinLockManager(this) }
     private var screen by mutableStateOf(Screen.GALLERY)
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -68,10 +69,15 @@ class MainActivity : FragmentActivity() {
         SecureWindow.protect(window)
         WindowCompat.setDecorFitsSystemWindows(window, false)
         requestMediaAccess()
+        if (pinLock.isEnabled()) screen = Screen.LOCK
         setContent {
             GalleryTheme {
                 Surface(Modifier.fillMaxSize()) {
                     when (screen) {
+                        Screen.LOCK -> com.sidik.msgallery.ui.LockScreen(
+                            manager = pinLock,
+                            onUnlocked = { screen = Screen.GALLERY }
+                        )
                         Screen.GALLERY -> GalleryScreen(
                             items = items,
                             loading = loading,
@@ -80,7 +86,8 @@ class MainActivity : FragmentActivity() {
                         Screen.SETTINGS -> SettingsScreen(
                             context = this,
                             onBack = { screen = Screen.GALLERY },
-                            onVault = { screen = Screen.VAULT }
+                            onVault = { screen = Screen.VAULT },
+                            pinLock = pinLock
                         )
                         Screen.VAULT -> VaultScreen(
                             context = this,
@@ -95,6 +102,7 @@ class MainActivity : FragmentActivity() {
 
     override fun onResume() {
         super.onResume()
+        if (pinLock.isEnabled() && screen != Screen.LOCK) screen = Screen.LOCK
         if (!loading && screen == Screen.GALLERY) loadGallery()
     }
 
