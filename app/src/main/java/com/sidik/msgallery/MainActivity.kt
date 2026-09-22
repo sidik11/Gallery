@@ -12,6 +12,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -71,7 +72,6 @@ class MainActivity : FragmentActivity() {
     private val pinLock by lazy { PinLockManager(this) }
     private var screen by mutableStateOf(Screen.GALLERY)
     private var detailItem by mutableStateOf<MediaItem?>(null)
-    private var detailItem by mutableStateOf<MediaItem?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -94,7 +94,6 @@ class MainActivity : FragmentActivity() {
                             onRename = { item, name -> renameMedia(item, name) },
                             onCopy = { copyMedia(it) },
                             onTrashScreen = { loadTrash(); screen = Screen.TRASH },
-                            onDetails = { detailItem = it; screen = Screen.DETAILS },
                             onDetails = { detailItem = it; screen = Screen.DETAILS }
                         )
                         Screen.SETTINGS -> SettingsScreen(
@@ -106,7 +105,6 @@ class MainActivity : FragmentActivity() {
                         )
                         Screen.TRASH -> TrashScreen(trashItems, { screen = Screen.GALLERY }, { restoreFromTrash(it) }, { requestDelete(it) })
                         Screen.STORAGE -> StorageAnalyzerScreen(items, contentResolver) { screen = Screen.SETTINGS }
-                        Screen.DETAILS -> detailItem?.let { MediaDetailsScreen(it, contentResolver, { screen = Screen.GALLERY }, { loadGallery() }) }
                         Screen.DETAILS -> detailItem?.let { MediaDetailsScreen(it, contentResolver, { screen = Screen.GALLERY }, { loadGallery() }) }
                         Screen.VAULT -> VaultScreen(
                             context = this,
@@ -271,7 +269,6 @@ private fun GalleryScreen(
                 ) {
                     IconButton(onClick = { selectedIds = emptySet() }) { Icon(Icons.Default.Close, "Cancel selection") }
                     Text("${selectedIds.size} selected", modifier = Modifier.weight(1f))
-                    IconButton(onClick = { if (selectedItems.size == 1) onDetails(selectedItems.first()) }) { Icon(Icons.Default.Info, "Details") }
                     IconButton(onClick = { if (selectedItems.size == 1) onDetails(selectedItems.first()) }) { Icon(Icons.Default.Info, "Details") }
                     IconButton(onClick = { if (selectedItems.size == 1) renameItem = selectedItems.first() }) { Icon(Icons.Default.Edit, "Rename") }
                     IconButton(onClick = { if (selectedItems.size == 1) onCopy(selectedItems.first()); selectedIds = emptySet() }) { Icon(Icons.Default.ContentCopy, "Copy") }
