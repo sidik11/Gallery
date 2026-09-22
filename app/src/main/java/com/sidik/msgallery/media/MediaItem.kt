@@ -1,6 +1,9 @@
 package com.sidik.msgallery.media
+
 import android.net.Uri
+
 enum class MediaType { IMAGE, VIDEO }
+
 data class MediaItem(
     val id: Long,
     val uri: Uri,
@@ -11,5 +14,6 @@ data class MediaItem(
     val type: MediaType,
     val width: Int,
     val height: Int,
-    val durationMs: Long
+    val durationMs: Long,
+    val folderName: String = "Unknown"
 )
