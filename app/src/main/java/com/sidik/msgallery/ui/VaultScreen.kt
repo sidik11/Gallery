@@ -13,6 +13,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.sidik.msgallery.security.BiometricAuth
+import com.sidik.msgallery.security.KeyManager
 import com.sidik.msgallery.security.VaultRepository
 
 @Composable
@@ -22,6 +23,7 @@ fun VaultScreen(
     onImport: () -> Unit
 ) {
     val repository = remember { VaultRepository(context) }
+    val keyManager = remember { KeyManager() }
     var unlocked by remember { mutableStateOf(false) }
     var count by remember { mutableIntStateOf(repository.listEncrypted().size) }
 
@@ -31,43 +33,42 @@ fun VaultScreen(
     ) {
         Text("Secure Vault", style = MaterialTheme.typography.headlineMedium)
         Text(
-            "Vault files are encrypted with AES-256-GCM. The encryption key is protected by Android Keystore.",
+            "Encrypted vault storage uses AES-256-GCM. Files receive random identifiers and do not retain their original names.",
             style = MaterialTheme.typography.bodyMedium
         )
 
         if (!unlocked) {
-            Button(
-                onClick = {
-                    if (BiometricAuth.canAuthenticate(context) && context is androidx.fragment.app.FragmentActivity) {
-                        BiometricAuth.prompt(context, onResult = { success -> unlocked = success })
-                    }
+            Button(onClick = {
+                if (context is androidx.fragment.app.FragmentActivity &&
+                    BiometricAuth.canAuthenticate(context)
+                ) {
+                    BiometricAuth.prompt(context) { success -> unlocked = success }
                 }
-            ) {
-                Text("Unlock Vault")
-            }
+            }) { Text("Unlock Vault") }
         } else {
             Card {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("$count encrypted item(s)", style = MaterialTheme.typography.titleMedium)
-                    Text("Encrypted files never expose their original filename in the vault directory.")
+                    Text("The vault directory contains only encrypted .msgv containers.")
                 }
             }
             Button(onClick = {
-                if (BiometricAuth.canAuthenticate(context) && context is androidx.fragment.app.FragmentActivity) {
-                    BiometricAuth.prompt(context, onResult = { success -> if (success) onImport() })
+                if (context is androidx.fragment.app.FragmentActivity &&
+                    BiometricAuth.canAuthenticate(context)
+                ) {
+                    BiometricAuth.prompt(context) { success -> if (success) onImport() }
                 }
-            }) {
-                Text("Import encrypted file")
-            }
-            Button(onClick = {
-                count = repository.listEncrypted().size
-            }) {
+            }) { Text("Import encrypted media") }
+
+            Button(onClick = { count = repository.listEncrypted().size }) {
                 Text("Refresh")
+            }
+
+            Button(onClick = { unlocked = false }) {
+                Text("Lock Vault")
             }
         }
 
-        Button(onClick = onBack) {
-            Text("Back")
-        }
+        Button(onClick = onBack) { Text("Back") }
     }
 }
