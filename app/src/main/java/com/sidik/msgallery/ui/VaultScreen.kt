@@ -29,6 +29,7 @@ import com.sidik.msgallery.security.KeyManager
 import com.sidik.msgallery.security.PinLockManager
 import com.sidik.msgallery.security.VaultRepository
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 
