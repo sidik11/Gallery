@@ -7,6 +7,7 @@ import javax.crypto.Cipher
 import javax.crypto.CipherInputStream
 import javax.crypto.CipherOutputStream
 import javax.crypto.spec.GCMParameterSpec
+import javax.crypto.SecretKey
 import javax.crypto.spec.SecretKeySpec
 
 object CryptoEngine {
@@ -16,7 +17,9 @@ object CryptoEngine {
 
     fun randomKey(): ByteArray = ByteArray(32).also { SecureRandom().nextBytes(it) }
 
-    fun encrypt(input: InputStream, output: OutputStream, key: ByteArray) {
+    fun encrypt(input: InputStream, output: OutputStream, key: ByteArray) = encrypt(input, output, SecretKeySpec(key, "AES"))
+
+    fun encrypt(input: InputStream, output: OutputStream, key: SecretKey) {
         require(key.size == 32)
         val iv = ByteArray(IV_SIZE).also { SecureRandom().nextBytes(it) }
         output.write(MAGIC.toByteArray(Charsets.US_ASCII))
@@ -24,14 +27,16 @@ object CryptoEngine {
         output.write(iv.size)
         output.write(iv)
         val cipher = Cipher.getInstance("AES/GCM/NoPadding").apply {
-            init(Cipher.ENCRYPT_MODE, SecretKeySpec(key, "AES"), GCMParameterSpec(TAG_BITS, iv))
+            init(Cipher.ENCRYPT_MODE, key, GCMParameterSpec(TAG_BITS, iv))
         }
         CipherOutputStream(output, cipher).use { encrypted ->
             input.copyTo(encrypted, DEFAULT_BUFFER)
         }
     }
 
-    fun decrypt(input: InputStream, output: OutputStream, key: ByteArray) {
+    fun decrypt(input: InputStream, output: OutputStream, key: ByteArray) = decrypt(input, output, SecretKeySpec(key, "AES"))
+
+    fun decrypt(input: InputStream, output: OutputStream, key: SecretKey) {
         require(key.size == 32)
         val magic = ByteArray(5)
         if (input.readNBytes(magic) != 5 || String(magic, Charsets.US_ASCII) != MAGIC) {
@@ -44,7 +49,7 @@ object CryptoEngine {
         val iv = input.readNBytes(ivSize)
         if (iv.size != ivSize) error("Truncated vault header")
         val cipher = Cipher.getInstance("AES/GCM/NoPadding").apply {
-            init(Cipher.DECRYPT_MODE, SecretKeySpec(key, "AES"), GCMParameterSpec(TAG_BITS, iv))
+            init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(TAG_BITS, iv))
         }
         CipherInputStream(input, cipher).use { decrypted ->
             decrypted.copyTo(output, DEFAULT_BUFFER)
