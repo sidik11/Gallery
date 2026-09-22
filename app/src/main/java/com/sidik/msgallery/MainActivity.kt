@@ -40,7 +40,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-private enum class Screen { GALLERY, SETTINGS, VAULT, TRASH, LOCK }
+private enum class Screen { GALLERY, SETTINGS, VAULT, TRASH, STORAGE, LOCK }
 private enum class GalleryMode { PHOTOS, ALBUMS }
 
 class MainActivity : FragmentActivity() {
@@ -97,9 +97,11 @@ class MainActivity : FragmentActivity() {
                             context = this,
                             onBack = { screen = Screen.GALLERY },
                             onVault = { screen = Screen.VAULT },
+                            onStorage = { screen = Screen.STORAGE },
                             pinLock = pinLock
                         )
                         Screen.TRASH -> TrashScreen(trashItems, { screen = Screen.GALLERY }, { restoreFromTrash(it) }, { requestDelete(it) })
+                        Screen.STORAGE -> StorageAnalyzerScreen(items, contentResolver) { screen = Screen.SETTINGS }
                         Screen.VAULT -> VaultScreen(
                             context = this,
                             onBack = { screen = Screen.SETTINGS },
