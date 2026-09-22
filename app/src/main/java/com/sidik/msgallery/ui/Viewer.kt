@@ -1,14 +1,18 @@
 package com.sidik.msgallery.ui
 
 import android.content.Context
+import android.content.Intent
 import android.net.Uri
 import android.view.ViewGroup
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.Text
+import androidx.compose.foundation.layout.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -21,34 +25,80 @@ import androidx.media3.common.MediaItem as PlayerMediaItem
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import com.sidik.msgallery.media.ThumbnailEngine
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 
 @Composable
 fun ImageViewer(context: Context, uri: Uri) {
     var bitmap by remember(uri) { mutableStateOf<android.graphics.Bitmap?>(null) }
     var scale by remember(uri) { mutableFloatStateOf(1f) }
+    var offsetX by remember(uri) { mutableFloatStateOf(0f) }
+    var offsetY by remember(uri) { mutableFloatStateOf(0f) }
+    var showInfo by remember { mutableStateOf(false) }
+
     LaunchedEffect(uri) {
-        bitmap = ThumbnailEngine(context.contentResolver).load(uri, 2048, 2048)
+        bitmap = ThumbnailEngine(context.contentResolver).load(uri, 4096, 4096)
     }
-    Box(
-        Modifier.fillMaxSize().background(Color.Black),
-        contentAlignment = Alignment.Center
-    ) {
+
+    Box(Modifier.fillMaxSize().background(Color.Black)) {
         bitmap?.let {
             Image(
                 bitmap = it.asImageBitmap(),
                 contentDescription = null,
-                modifier = Modifier.fillMaxSize().graphicsLayer {
-                    scaleX = scale
-                    scaleY = scale
-                }.pointerInput(Unit) {
-                    detectTransformGestures { _, _, zoom, _ ->
-                        scale = (scale * zoom).coerceIn(1f, 5f)
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        scaleX = scale
+                        scaleY = scale
+                        translationX = offsetX
+                        translationY = offsetY
                     }
-                }
+                    .pointerInput(Unit) {
+                        detectTransformGestures { _, pan, zoom, _ ->
+                            scale = (scale * zoom).coerceIn(1f, 6f)
+                            if (scale > 1f) {
+                                offsetX += pan.x
+                                offsetY += pan.y
+                            } else {
+                                offsetX = 0f
+                                offsetY = 0f
+                            }
+                        }
+                    }
+                    .pointerInput(Unit) {
+                        detectTapGestures(
+                            onDoubleTap = {
+                                if (scale > 1f) {
+                                    scale = 1f
+                                    offsetX = 0f
+                                    offsetY = 0f
+                                } else scale = 2.5f
+                            }
+                        )
+                    }
             )
-        } ?: Text("Loading…", color = Color.White)
+        } ?: CircularProgressIndicator(Modifier.align(Alignment.Center))
+
+        Row(
+            Modifier.align(Alignment.BottomCenter).padding(18.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            FilledTonalIconButton(onClick = {
+                context.startActivity(
+                    Intent.createChooser(Intent(Intent.ACTION_SEND).apply {
+                        type = context.contentResolver.getType(uri) ?: "image/*"
+                        putExtra(Intent.EXTRA_STREAM, uri)
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }, "Share media")
+                )
+            }) { Icon(Icons.Default.Share, "Share") }
+
+            FilledTonalIconButton(onClick = { showInfo = true }) {
+                Icon(Icons.Default.Info, "Media information")
+            }
+        }
+
+        if (showInfo) {
+            MediaInfoDialog(context, uri, onDismiss = { showInfo = false })
+        }
     }
 }
 
@@ -62,16 +112,72 @@ fun VideoViewer(context: Context, uri: Uri) {
         }
     }
     DisposableEffect(player) { onDispose { player.release() } }
-    AndroidView(
-        factory = {
-            PlayerView(it).apply {
-                layoutParams = ViewGroup.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.MATCH_PARENT
+    Box(Modifier.fillMaxSize().background(Color.Black)) {
+        AndroidView(
+            factory = {
+                PlayerView(it).apply {
+                    layoutParams = ViewGroup.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.MATCH_PARENT
+                    )
+                    this.player = player
+                    useController = true
+                }
+            },
+            modifier = Modifier.fillMaxSize()
+        )
+        FilledTonalIconButton(
+            onClick = {
+                context.startActivity(
+                    Intent.createChooser(Intent(Intent.ACTION_SEND).apply {
+                        type = context.contentResolver.getType(uri) ?: "video/*"
+                        putExtra(Intent.EXTRA_STREAM, uri)
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }, "Share video")
                 )
-                this.player = player
+            },
+            modifier = Modifier.align(Alignment.BottomEnd).padding(18.dp)
+        ) { Icon(Icons.Default.Share, "Share video") }
+    }
+}
+
+@Composable
+private fun MediaInfoDialog(context: Context, uri: Uri, onDismiss: () -> Unit) {
+    var name by remember(uri) { mutableStateOf("Loading…") }
+    var size by remember(uri) { mutableStateOf("") }
+    LaunchedEffect(uri) {
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            context.contentResolver.query(
+                uri,
+                arrayOf(android.provider.OpenableColumns.DISPLAY_NAME, android.provider.OpenableColumns.SIZE),
+                null, null, null
+            )?.use { c ->
+                if (c.moveToFirst()) {
+                    val ni = c.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                    val si = c.getColumnIndex(android.provider.OpenableColumns.SIZE)
+                    if (ni >= 0) name = c.getString(ni) ?: "Unknown"
+                    if (si >= 0 && !c.isNull(si)) size = formatBytes(c.getLong(si))
+                }
             }
-        },
-        modifier = Modifier.fillMaxSize().background(Color.Black)
+        }
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Media information") },
+        text = { Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("Name: $name")
+            if (size.isNotEmpty()) Text("Size: $size")
+            Text("URI: $uri")
+        }},
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } }
     )
+}
+
+private fun formatBytes(bytes: Long): String {
+    if (bytes < 1024) return "$bytes B"
+    val units = arrayOf("KB", "MB", "GB", "TB")
+    var value = bytes.toDouble()
+    var i = -1
+    do { value /= 1024.0; i++ } while (value >= 1024 && i < units.lastIndex)
+    return String.format(java.util.Locale.US, "%.1f %s", value, units[i])
 }
