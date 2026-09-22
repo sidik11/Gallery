@@ -12,7 +12,7 @@ class ThumbnailEngine(private val resolver: ContentResolver) {
     suspend fun load(uri: android.net.Uri, width: Int = 512, height: Int = 512): Bitmap? =
         withContext(Dispatchers.IO) {
             runCatching {
-                resolver.loadThumbnail(uri, Size(width, height), Bundle())
+                resolver.loadThumbnail(uri, Size(width, height), null)
             }.getOrNull()
         }
 }
