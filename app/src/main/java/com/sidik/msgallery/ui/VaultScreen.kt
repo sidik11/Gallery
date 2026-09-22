@@ -104,13 +104,7 @@ fun VaultScreen(
             }
         } else {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = {
-                    if (context is androidx.fragment.app.FragmentActivity) {
-                        BiometricAuth.prompt(context, "Authorize Vault Import") { success ->
-                            if (success) onImport()
-                        }
-                    }
-                }) { Text("Import") }
+                Button(onClick = onImport) { Text("Import") }
                 OutlinedButton(onClick = { files = repository.listEncrypted() }) { Text("Refresh") }
                 OutlinedButton(onClick = {
                     selected = null
