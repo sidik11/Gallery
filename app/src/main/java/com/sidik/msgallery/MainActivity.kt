@@ -240,7 +240,6 @@ private fun GalleryScreen(
     onRename: (MediaItem, String) -> Unit,
     onCopy: (MediaItem) -> Unit,
     onTrashScreen: () -> Unit,
-    onDetails: (MediaItem) -> Unit,
     onDetails: (MediaItem) -> Unit
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -251,11 +250,16 @@ private fun GalleryScreen(
     var mode by rememberSaveable { mutableStateOf(GalleryMode.PHOTOS) }
     var sortNewest by rememberSaveable { mutableStateOf(true) }
     var favoritesOnly by rememberSaveable { mutableStateOf(false) }
+    var showAdvancedFilter by rememberSaveable { mutableStateOf(false) }
+    var mediaFilter by remember { mutableStateOf(MediaFilter()) }
     var selectedIds by remember { mutableStateOf<Set<Long>>(emptySet()) }
     var renameItem by remember { mutableStateOf<MediaItem?>(null) }
 
-    val filtered = remember(items, query, videosOnly, sortNewest) {
-        val base = MediaSearch().filter(items, query, videosOnly).filter { !favoritesOnly || it.isFavorite }
+    val effectiveFilter = remember(mediaFilter, videosOnly) {
+        if (videosOnly) mediaFilter.copy(type = MediaType.VIDEO) else mediaFilter
+    }
+    val filtered = remember(items, query, effectiveFilter, favoritesOnly, sortNewest) {
+        val base = MediaSearch().filter(items, query, effectiveFilter).filter { !favoritesOnly || it.isFavorite }
         if (sortNewest) base.sortedByDescending { it.dateTaken } else base.sortedBy { it.name.lowercase(Locale.getDefault()) }
     }
     val selectedItems = remember(selectedIds, items) { items.filter { it.id in selectedIds } }
@@ -286,6 +290,7 @@ private fun GalleryScreen(
                         modifier = Modifier.weight(1f), singleLine = true,
                         placeholder = { Text("Search photos and videos") }
                     )
+                    IconButton(onClick = { showAdvancedFilter = true }) { Icon(Icons.Default.Tune, "Advanced filters") }
                     IconButton(onClick = { showSearch = false; query = "" }) {
                         Icon(Icons.Default.Close, "Close search")
                     }
@@ -300,6 +305,7 @@ private fun GalleryScreen(
                         Text(if (loading) "Scanning device…" else "${filtered.size} items")
                     }
                     IconButton(onClick = { showSearch = true }) { Icon(Icons.Default.Search, "Search") }
+                    IconButton(onClick = { showAdvancedFilter = true }) { Icon(Icons.Default.Tune, "Advanced filters") }
                     IconButton(onClick = onTrashScreen) { Icon(Icons.Default.DeleteSweep, "Recently deleted") }
                     IconButton(onClick = onSettings) { Icon(Icons.Default.Settings, "Settings") }
                 }
@@ -353,6 +359,19 @@ private fun GalleryScreen(
                 TextButton(onClick = { onRename(item, name); renameItem = null; selectedIds = emptySet() }) { Text("Save") }
             },
             dismissButton = { TextButton(onClick = { renameItem = null }) { Text("Cancel") } }
+        )
+    }
+
+    if (showAdvancedFilter) {
+        AdvancedFilterDialog(
+            current = mediaFilter,
+            folders = items.map { it.folderName }.filter { it.isNotBlank() }.distinct().sorted(),
+            onApply = {
+                mediaFilter = it
+                videosOnly = false
+                showAdvancedFilter = false
+            },
+            onDismiss = { showAdvancedFilter = false }
         )
     }
 
