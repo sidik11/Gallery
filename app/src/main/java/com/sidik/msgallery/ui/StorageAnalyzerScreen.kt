@@ -37,7 +37,7 @@ fun StorageAnalyzerScreen(items: List<MediaItem>, resolver: android.content.Cont
                 Text("Videos: ${s.videoCount}")
                 Text("Largest: ${s.largest?.name ?: "None"}${if (s.largest != null) " • " + formatBytes(s.largest.sizeBytes) else ""}")
             }}} }
-            item { Button(enabled = !scanning && items.isNotEmpty(), onClick = { scope.launch { scanning = true; duplicates = StorageAnalyzer(resolver).exactDuplicates(items); scanning = false } }, Modifier.fillMaxWidth()) { Text(if (scanning) "Scanning…" else "Find exact duplicates") } }
+            item { Button(enabled = !scanning && items.isNotEmpty(), onClick = { scope.launch { scanning = true; duplicates = StorageAnalyzer(resolver).exactDuplicates(items); scanning = false } }, modifier = Modifier.fillMaxWidth()) { Text(if (scanning) "Scanning…" else "Find exact duplicates") } }
             items(duplicates.size) { i -> val g = duplicates[i]; Card(Modifier.fillMaxWidth()) { Column(Modifier.padding(14.dp)) { Text("${g.items.size} identical files", style = MaterialTheme.typography.titleMedium); Text("Wasted space: ${formatBytes(g.wastedBytes)}"); g.items.forEach { Text("• ${it.name} — ${formatBytes(it.sizeBytes)}") } } } }
         }
     }
