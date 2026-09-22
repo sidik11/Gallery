@@ -15,5 +15,6 @@ data class MediaItem(
     val width: Int,
     val height: Int,
     val durationMs: Long,
-    val folderName: String = "Unknown"
+    val folderName: String = "Unknown",
+    val isFavorite: Boolean = false
 )
