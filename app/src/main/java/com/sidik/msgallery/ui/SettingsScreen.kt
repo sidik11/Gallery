@@ -29,6 +29,7 @@ fun SettingsScreen(
     context: Context,
     onBack: () -> Unit,
     onVault: () -> Unit,
+    onStorage: () -> Unit,
     pinLock: PinLockManager
 ) {
     var showPinSetup by remember { mutableStateOf(false) }
@@ -72,6 +73,10 @@ fun SettingsScreen(
             }) {
                 Text("Disable App PIN")
             }
+        }
+
+        Button(onClick = onStorage) {
+            Text("Storage & Duplicate Analyzer")
         }
 
         Button(onClick = onVault) {
