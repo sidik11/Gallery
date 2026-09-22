@@ -8,14 +8,14 @@ class VaultRepository(private val context: Context) {
     private val root: File
         get() = File(context.filesDir, "vault").also { it.mkdirs() }
 
-    fun importEncrypted(source: java.io.InputStream, originalName: String, key: ByteArray): File {
+    fun importEncrypted(source: java.io.InputStream, originalName: String, key: javax.crypto.SecretKey): File {
         val safeName = originalName.substringAfterLast('/').substringAfterLast('\\').ifBlank { "media.bin" }
         val target = File(root, UUID.randomUUID().toString() + ".msgv")
         target.outputStream().use { output -> CryptoEngine.encrypt(source, output, key) }
         return target
     }
 
-    fun decryptToTemporaryFile(vaultFile: File, key: ByteArray): File {
+    fun decryptToTemporaryFile(vaultFile: File, key: javax.crypto.SecretKey): File {
         val temp = File.createTempFile("msgallery_", ".tmp", context.cacheDir)
         vaultFile.inputStream().use { input ->
             temp.outputStream().use { output -> CryptoEngine.decrypt(input, output, key) }
