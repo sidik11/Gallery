@@ -55,6 +55,11 @@ class MainActivity : FragmentActivity() {
             }
         }
 
+    private val trashLauncher =
+        registerForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) {
+            if (it.resultCode == RESULT_OK) loadGallery()
+        }
+
     private val vaultFileLauncher =
         registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
             if (uri != null) encryptSelectedFile(uri)
@@ -80,7 +85,9 @@ class MainActivity : FragmentActivity() {
                             items = items,
                             loading = loading,
                             onSettings = { screen = Screen.SETTINGS },
-                            onDelete = { requestDelete(it) }
+                            onDelete = { requestDelete(it) },
+                            onFavorite = { toggleFavorite(it) },
+                            onTrash = { requestTrash(it) }
                         )
                         Screen.SETTINGS -> SettingsScreen(
                             context = this,
@@ -117,6 +124,30 @@ class MainActivity : FragmentActivity() {
             loading = true
             items = runCatching { MediaRepository(contentResolver).loadAll() }.getOrDefault(emptyList())
             loading = false
+        }
+    }
+
+    private fun toggleFavorite(selected: List<MediaItem>) {
+        lifecycleScope.launch {
+            val operations = MediaOperations(contentResolver)
+            withContext(Dispatchers.IO) {
+                selected.forEach { operations.setFavorite(it.uri, !it.isFavorite) }
+            }
+            loadGallery()
+            Toast.makeText(this@MainActivity, "Favorites updated", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun requestTrash(selected: List<MediaItem>) {
+        if (selected.isEmpty()) return
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            val request = MediaStore.createTrashRequest(contentResolver, selected.map { it.uri }, true)
+            trashLauncher.launch(IntentSenderRequest.Builder(request.intentSender).build())
+        } else {
+            lifecycleScope.launch(Dispatchers.IO) {
+                selected.forEach { contentResolver.delete(it.uri, null, null) }
+                withContext(Dispatchers.Main) { loadGallery() }
+            }
         }
     }
 
@@ -167,7 +198,9 @@ private fun GalleryScreen(
     items: List<MediaItem>,
     loading: Boolean,
     onSettings: () -> Unit,
-    onDelete: (List<MediaItem>) -> Unit
+    onDelete: (List<MediaItem>) -> Unit,
+    onFavorite: (List<MediaItem>) -> Unit,
+    onTrash: (List<MediaItem>) -> Unit
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     var query by rememberSaveable { mutableStateOf("") }
@@ -176,10 +209,11 @@ private fun GalleryScreen(
     var showSearch by rememberSaveable { mutableStateOf(false) }
     var mode by rememberSaveable { mutableStateOf(GalleryMode.PHOTOS) }
     var sortNewest by rememberSaveable { mutableStateOf(true) }
+    var favoritesOnly by rememberSaveable { mutableStateOf(false) }
     var selectedIds by remember { mutableStateOf<Set<Long>>(emptySet()) }
 
     val filtered = remember(items, query, videosOnly, sortNewest) {
-        val base = MediaSearch().filter(items, query, videosOnly)
+        val base = MediaSearch().filter(items, query, videosOnly).filter { !favoritesOnly || it.isFavorite }
         if (sortNewest) base.sortedByDescending { it.dateTaken } else base.sortedBy { it.name.lowercase(Locale.getDefault()) }
     }
     val selectedItems = remember(selectedIds, items) { items.filter { it.id in selectedIds } }
@@ -193,8 +227,11 @@ private fun GalleryScreen(
                 ) {
                     IconButton(onClick = { selectedIds = emptySet() }) { Icon(Icons.Default.Close, "Cancel selection") }
                     Text("${selectedIds.size} selected", modifier = Modifier.weight(1f))
-                    IconButton(onClick = { onDelete(selectedItems); selectedIds = emptySet() }) {
-                        Icon(Icons.Default.Delete, "Delete selected")
+                    IconButton(onClick = { onFavorite(selectedItems); selectedIds = emptySet() }) {
+                        Icon(Icons.Default.Favorite, "Toggle favorites")
+                    }
+                    IconButton(onClick = { onTrash(selectedItems); selectedIds = emptySet() }) {
+                        Icon(Icons.Default.Delete, "Move to trash")
                     }
                 }
             } else if (showSearch) {
@@ -232,6 +269,7 @@ private fun GalleryScreen(
                     FilterChip(mode == GalleryMode.PHOTOS, { mode = GalleryMode.PHOTOS }, label = { Text("Photos") })
                     FilterChip(mode == GalleryMode.ALBUMS, { mode = GalleryMode.ALBUMS }, label = { Text("Albums") })
                     FilterChip(videosOnly, { videosOnly = !videosOnly }, label = { Text("Videos") })
+                    FilterChip(favoritesOnly, { favoritesOnly = !favoritesOnly }, label = { Text("Favorites") })
                     FilterChip(sortNewest, { sortNewest = !sortNewest }, label = { Text(if (sortNewest) "Newest" else "Name") })
                 }
             }
