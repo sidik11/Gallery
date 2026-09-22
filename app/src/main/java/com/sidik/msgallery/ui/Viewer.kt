@@ -27,6 +27,42 @@ import androidx.media3.ui.PlayerView
 import com.sidik.msgallery.media.ThumbnailEngine
 
 @Composable
+fun MediaPager(
+    context: Context,
+    items: List<com.sidik.msgallery.media.MediaItem>,
+    initialIndex: Int,
+    onDismiss: () -> Unit
+) {
+    if (items.isEmpty()) return
+    val pagerState = androidx.compose.foundation.pager.rememberPagerState(
+        initialPage = initialIndex.coerceIn(0, items.lastIndex),
+        pageCount = { items.size }
+    )
+    Box(Modifier.fillMaxSize().background(Color.Black)) {
+        androidx.compose.foundation.pager.HorizontalPager(
+            state = pagerState,
+            modifier = Modifier.fillMaxSize(),
+            beyondViewportPageCount = 1
+        ) { page ->
+            val item = items[page]
+            if (item.type == com.sidik.msgallery.media.MediaType.IMAGE) ImageViewer(context, item.uri)
+            else VideoViewer(context, item.uri)
+        }
+        Surface(
+            Modifier.align(Alignment.TopCenter).padding(12.dp),
+            color = Color.Black.copy(alpha = 0.65f),
+            shape = MaterialTheme.shapes.medium
+        ) {
+            Text("$"+"{pagerState.currentPage + 1} / $"+"{items.size}", color = Color.White,
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp))
+        }
+        IconButton(onClick = onDismiss, modifier = Modifier.align(Alignment.TopEnd).padding(10.dp)) {
+            Text("×", color = Color.White, style = MaterialTheme.typography.headlineMedium)
+        }
+    }
+}
+
+@Composable
 fun ImageViewer(context: Context, uri: Uri) {
     var bitmap by remember(uri) { mutableStateOf<android.graphics.Bitmap?>(null) }
     var scale by remember(uri) { mutableFloatStateOf(1f) }
