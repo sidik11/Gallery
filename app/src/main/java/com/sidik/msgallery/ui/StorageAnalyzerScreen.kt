@@ -30,7 +30,7 @@ fun StorageAnalyzerScreen(items: List<MediaItem>, resolver: android.content.Cont
                 Text("Device storage", style = MaterialTheme.typography.titleMedium)
                 Text("Used: ${formatBytes((s.deviceTotalBytes - s.deviceFreeBytes).coerceAtLeast(0))} / ${formatBytes(s.deviceTotalBytes)}")
                 Text("Free: ${formatBytes(s.deviceFreeBytes)}")
-                LinearProgressIndicator({ if (s.deviceTotalBytes == 0L) 0f else (s.deviceTotalBytes - s.deviceFreeBytes).toFloat() / s.deviceTotalBytes }, Modifier.fillMaxWidth())
+                LinearProgressIndicator(progress = { if (s.deviceTotalBytes == 0L) 0f else (s.deviceTotalBytes - s.deviceFreeBytes).toFloat() / s.deviceTotalBytes }, modifier = Modifier.fillMaxWidth())
                 HorizontalDivider()
                 Text("Gallery media: ${formatBytes(s.totalBytes)}")
                 Text("Photos: ${s.imageCount}")
