@@ -71,7 +71,7 @@ class PinLockManager(private val context: Context) {
         return runCatching {
             val bytes = file.readBytes()
             require(bytes.size > 5 + IV_BYTES + 16)
-            require(String(bytes, 0, 5, Charsets.US_ASCII) == MAGIC)
+            val magic = String(bytes, 0, 5, Charsets.US_ASCII)\n            require(magic == MAGIC || magic == LEGACY_MAGIC)
             val iv = bytes.copyOfRange(5, 5 + IV_BYTES)
             val encrypted = bytes.copyOfRange(5 + IV_BYTES, bytes.size)
             val cipher = Cipher.getInstance("AES/GCM/NoPadding").apply {
