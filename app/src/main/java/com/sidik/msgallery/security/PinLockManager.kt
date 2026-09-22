@@ -5,6 +5,8 @@ import android.util.Base64
 import java.io.File
 import java.nio.ByteBuffer
 import java.security.MessageDigest
+import javax.crypto.SecretKeyFactory
+import javax.crypto.spec.PBEKeySpec
 import java.security.SecureRandom
 import javax.crypto.Cipher
 import javax.crypto.Mac
@@ -26,7 +28,8 @@ class PinLockManager(private val context: Context) {
     private companion object {
         const val ALIAS = "ms_gallery_app_lock_v1"
         const val FILE_NAME = "app_lock.bin"
-        const val MAGIC = "MSLP1"
+        const val MAGIC = "MSLP2"
+        const val LEGACY_MAGIC = "MSLP1"
         const val SALT_BYTES = 16
         const val VERIFIER_BYTES = 32
         const val ITERATIONS = 210_000
@@ -79,7 +82,7 @@ class PinLockManager(private val context: Context) {
             require(version == 1)
             val salt = plain.copyOfRange(1, 1 + SALT_BYTES)
             val expected = plain.copyOfRange(1 + SALT_BYTES, 1 + SALT_BYTES + VERIFIER_BYTES)
-            val actual = derive(pin, salt)
+            val actual = if (magic == MAGIC) derive(pin, salt) else deriveLegacy(pin, salt)
             MessageDigest.isEqual(expected, actual)
         }.getOrDefault(false).also {
             pin.fill('\u0000')
