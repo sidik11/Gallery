@@ -15,11 +15,13 @@ class MediaRepository(private val resolver: ContentResolver) {
             MediaStore.Files.FileColumns.DISPLAY_NAME,
             MediaStore.Files.FileColumns.MIME_TYPE,
             MediaStore.Files.FileColumns.DATE_ADDED,
+            MediaStore.Files.FileColumns.DATE_MODIFIED,
             MediaStore.Files.FileColumns.SIZE,
             MediaStore.Files.FileColumns.MEDIA_TYPE,
             MediaStore.Files.FileColumns.WIDTH,
             MediaStore.Files.FileColumns.HEIGHT,
-            MediaStore.Video.VideoColumns.DURATION
+            MediaStore.Video.VideoColumns.DURATION,
+            MediaStore.Files.FileColumns.BUCKET_DISPLAY_NAME
         )
         val selection = MediaStore.Files.FileColumns.MEDIA_TYPE + " IN (?, ?)"
         val args = arrayOf(
@@ -30,29 +32,34 @@ class MediaRepository(private val resolver: ContentResolver) {
             collection, projection, selection, args,
             MediaStore.Files.FileColumns.DATE_ADDED + " DESC"
         )?.use { cursor ->
-            val idIndex = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns._ID)
-            val nameIndex = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.DISPLAY_NAME)
-            val mimeIndex = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.MIME_TYPE)
-            val dateIndex = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.DATE_ADDED)
-            val sizeIndex = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.SIZE)
-            val typeIndex = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.MEDIA_TYPE)
-            val widthIndex = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.WIDTH)
-            val heightIndex = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.HEIGHT)
-            val durationIndex = cursor.getColumnIndexOrThrow(MediaStore.Video.VideoColumns.DURATION)
+            val id = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns._ID)
+            val name = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.DISPLAY_NAME)
+            val mime = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.MIME_TYPE)
+            val added = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.DATE_ADDED)
+            val modified = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.DATE_MODIFIED)
+            val size = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.SIZE)
+            val type = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.MEDIA_TYPE)
+            val width = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.WIDTH)
+            val height = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.HEIGHT)
+            val duration = cursor.getColumnIndexOrThrow(MediaStore.Video.VideoColumns.DURATION)
+            val bucket = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.BUCKET_DISPLAY_NAME)
+
             while (cursor.moveToNext()) {
-                val id = cursor.getLong(idIndex)
-                val isVideo = cursor.getInt(typeIndex) == MediaStore.Files.FileColumns.MEDIA_TYPE_VIDEO
+                val video = cursor.getInt(type) == MediaStore.Files.FileColumns.MEDIA_TYPE_VIDEO
+                val dateSeconds = if (cursor.getLong(added) > 0) cursor.getLong(added)
+                    else cursor.getLong(modified)
                 result += MediaItem(
-                    id = id,
-                    uri = ContentUris.withAppendedId(collection, id),
-                    name = cursor.getString(nameIndex) ?: "Unnamed",
-                    mimeType = cursor.getString(mimeIndex) ?: "application/octet-stream",
-                    dateTaken = cursor.getLong(dateIndex) * 1000L,
-                    sizeBytes = cursor.getLong(sizeIndex),
-                    type = if (isVideo) MediaType.VIDEO else MediaType.IMAGE,
-                    width = cursor.getInt(widthIndex),
-                    height = cursor.getInt(heightIndex),
-                    durationMs = if (isVideo) cursor.getLong(durationIndex) else 0L
+                    id = cursor.getLong(id),
+                    uri = ContentUris.withAppendedId(collection, cursor.getLong(id)),
+                    name = cursor.getString(name) ?: "Unnamed",
+                    mimeType = cursor.getString(mime) ?: "application/octet-stream",
+                    dateTaken = dateSeconds * 1000L,
+                    sizeBytes = cursor.getLong(size),
+                    type = if (video) MediaType.VIDEO else MediaType.IMAGE,
+                    width = cursor.getInt(width),
+                    height = cursor.getInt(height),
+                    durationMs = if (video) cursor.getLong(duration) else 0L,
+                    folderName = cursor.getString(bucket) ?: "Unknown"
                 )
             }
         }
