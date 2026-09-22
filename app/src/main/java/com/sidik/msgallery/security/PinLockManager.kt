@@ -36,12 +36,14 @@ class PinLockManager(private val context: Context) {
         const val TAG_BITS = 128
         const val MAX_FAILURES = 5
         const val MAX_DELAY_MS = 30_000L
+        const val THROTTLE_FILE_NAME = "app_lock_throttle.bin"
+        const val THROTTLE_MAGIC = "MSLT1"
     }
 
     private val file get() = File(context.filesDir, FILE_NAME)
+    private val throttleFile get() = File(context.filesDir, THROTTLE_FILE_NAME)
 
-    @Volatile
-    private var failedAttempts = 0
+    private data class ThrottleState(val failures: Int, val lockedUntilMs: Long)
 
     fun isEnabled(): Boolean = file.exists()
 
@@ -66,7 +68,7 @@ class PinLockManager(private val context: Context) {
                 out.write(iv)
                 out.write(encrypted)
             }
-            failedAttempts = 0
+            clearThrottle()
         } finally {
             pin.fill('\u0000')
             verifier.fill(0)
@@ -82,27 +84,33 @@ class PinLockManager(private val context: Context) {
      * the Compose main thread is never blocked by Thread.sleep().
      */
     suspend fun verifyWithThrottle(pin: CharArray): Boolean {
-        val attempt = failedAttempts
-        if (attempt > 0) {
-            val delayMs = (1_000L shl (attempt - 1).coerceAtMost(5))
-                .coerceAtMost(MAX_DELAY_MS)
-            delay(delayMs)
+        val now = System.currentTimeMillis()
+        val state = readThrottle()
+        val remaining = (state.lockedUntilMs - now).coerceAtLeast(0L)
+        if (remaining > 0L) {
+            delay(remaining)
         }
 
         val valid = verify(pin)
         if (valid) {
-            failedAttempts = 0
+            clearThrottle()
         } else {
-            failedAttempts = (failedAttempts + 1).coerceAtMost(MAX_FAILURES)
+            val failures = (state.failures + 1).coerceAtMost(MAX_FAILURES)
+            val delayMs = (1_000L shl (failures - 1).coerceAtMost(5))
+                .coerceAtMost(MAX_DELAY_MS)
+            writeThrottle(ThrottleState(failures, System.currentTimeMillis() + delayMs))
         }
         return valid
     }
 
     fun resetThrottle() {
-        failedAttempts = 0
+        clearThrottle()
     }
 
-    fun isThrottled(): Boolean = failedAttempts > 0
+    fun isThrottled(): Boolean {
+        val state = readThrottle()
+        return state.failures > 0 && state.lockedUntilMs > System.currentTimeMillis()
+    }
 
     fun verify(pin: CharArray): Boolean {
         if (!isEnabled()) {
@@ -153,7 +161,38 @@ class PinLockManager(private val context: Context) {
 
     fun disable() {
         file.delete()
-        failedAttempts = 0
+        clearThrottle()
+    }
+
+    private fun readThrottle(): ThrottleState {
+        if (!throttleFile.isFile) return ThrottleState(0, 0L)
+        return runCatching {
+            val bytes = throttleFile.readBytes()
+            require(bytes.size == 5 + 4 + 8)
+            require(String(bytes, 0, 5, Charsets.US_ASCII) == THROTTLE_MAGIC)
+            val buffer = ByteBuffer.wrap(bytes, 5, 12)
+            val failures = buffer.int.coerceIn(0, MAX_FAILURES)
+            val lockedUntil = buffer.long.coerceAtLeast(0L)
+            bytes.fill(0)
+            ThrottleState(failures, lockedUntil)
+        }.getOrDefault(ThrottleState(0, 0L))
+    }
+
+    private fun writeThrottle(state: ThrottleState) {
+        val bytes = ByteBuffer.allocate(5 + 4 + 8)
+            .put(THROTTLE_MAGIC.toByteArray(Charsets.US_ASCII))
+            .putInt(state.failures)
+            .putLong(state.lockedUntilMs)
+            .array()
+        try {
+            throttleFile.outputStream().use { it.write(bytes) }
+        } finally {
+            bytes.fill(0)
+        }
+    }
+
+    private fun clearThrottle() {
+        throttleFile.delete()
     }
 
     private fun validatePin(pin: CharArray) {
