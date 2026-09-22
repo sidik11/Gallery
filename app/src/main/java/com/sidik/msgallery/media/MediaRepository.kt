@@ -21,7 +21,8 @@ class MediaRepository(private val resolver: ContentResolver) {
             MediaStore.Files.FileColumns.WIDTH,
             MediaStore.Files.FileColumns.HEIGHT,
             MediaStore.Video.VideoColumns.DURATION,
-            MediaStore.Files.FileColumns.BUCKET_DISPLAY_NAME
+            MediaStore.Files.FileColumns.BUCKET_DISPLAY_NAME,
+            MediaStore.MediaColumns.IS_FAVORITE
         )
         val selection = MediaStore.Files.FileColumns.MEDIA_TYPE + " IN (?, ?)"
         val args = arrayOf(
@@ -43,6 +44,7 @@ class MediaRepository(private val resolver: ContentResolver) {
             val height = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.HEIGHT)
             val duration = cursor.getColumnIndexOrThrow(MediaStore.Video.VideoColumns.DURATION)
             val bucket = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.BUCKET_DISPLAY_NAME)
+            val favorite = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.IS_FAVORITE)
 
             while (cursor.moveToNext()) {
                 val video = cursor.getInt(type) == MediaStore.Files.FileColumns.MEDIA_TYPE_VIDEO
@@ -59,7 +61,8 @@ class MediaRepository(private val resolver: ContentResolver) {
                     width = cursor.getInt(width),
                     height = cursor.getInt(height),
                     durationMs = if (video) cursor.getLong(duration) else 0L,
-                    folderName = cursor.getString(bucket) ?: "Unknown"
+                    folderName = cursor.getString(bucket) ?: "Unknown",
+                    isFavorite = cursor.getInt(favorite) != 0
                 )
             }
         }
