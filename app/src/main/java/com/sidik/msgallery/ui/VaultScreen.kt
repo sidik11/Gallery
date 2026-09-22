@@ -231,7 +231,7 @@ private fun VaultVideoViewer(bytes: ByteArray) {
                     ViewGroup.LayoutParams.MATCH_PARENT,
                     ViewGroup.LayoutParams.MATCH_PARENT
                 )
-                player = this@apply.player
+                this.player = player
                 useController = true
             }
         },
