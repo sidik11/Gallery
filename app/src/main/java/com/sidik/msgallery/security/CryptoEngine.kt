@@ -36,7 +36,7 @@ object CryptoEngine {
     fun decrypt(input: InputStream, output: OutputStream, key: ByteArray) = decrypt(input, output, SecretKeySpec(key, "AES"))
 
     fun decrypt(input: InputStream, output: OutputStream, key: SecretKey) {
-        require(key.encoded?.size == 32) { "Vault key must be 256-bit AES" }
+        require(key.encoded?.let { it.size == 32 } == true) { "Vault key must be 256-bit AES" }
         val magic = ByteArray(5)
         if (input.readNBytes(magic) != 5 || String(magic, Charsets.US_ASCII) != MAGIC) {
             error("Invalid MS Gallery vault file")
