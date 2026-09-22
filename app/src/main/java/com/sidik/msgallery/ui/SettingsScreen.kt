@@ -14,17 +14,26 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.fragment.app.FragmentActivity
 import com.sidik.msgallery.security.BiometricAuth
+import com.sidik.msgallery.security.PinLockManager
 
 @Composable
 fun SettingsScreen(
     context: Context,
     onBack: () -> Unit,
-    onVault: () -> Unit
+    onVault: () -> Unit,
+    pinLock: PinLockManager
 ) {
+    var showPinSetup by remember { mutableStateOf(false) }
+    var pinEnabled by remember { mutableStateOf(pinLock.isEnabled()) }
+
     Column(
         Modifier.fillMaxSize().padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -52,6 +61,19 @@ fun SettingsScreen(
             }
         }
 
+        Button(onClick = { showPinSetup = true }) {
+            Text(if (pinEnabled) "Change App PIN" else "Enable App PIN")
+        }
+
+        if (pinEnabled) {
+            Button(onClick = {
+                pinLock.disable()
+                pinEnabled = false
+            }) {
+                Text("Disable App PIN")
+            }
+        }
+
         Button(onClick = onVault) {
             Text("Open Secure Vault")
         }
@@ -60,4 +82,63 @@ fun SettingsScreen(
             Text("Back to Gallery")
         }
     }
+
+    if (showPinSetup) {
+        PinSetupDialog(
+            manager = pinLock,
+            onDismiss = { showPinSetup = false },
+            onSaved = { showPinSetup = false; pinEnabled = true }
+        )
+    }
+}
+
+
+@Composable
+private fun PinSetupDialog(
+    manager: PinLockManager,
+    onDismiss: () -> Unit,
+    onSaved: () -> Unit
+) {
+    var first by remember { mutableStateOf("") }
+    var second by remember { mutableStateOf("") }
+    var error by remember { mutableStateOf<String?>(null) }
+
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Set App PIN") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                androidx.compose.material3.OutlinedTextField(
+                    value = first,
+                    onValueChange = { if (it.length <= 12 && it.all(Char::isDigit)) { first = it; error = null } },
+                    label = { Text("New PIN") },
+                    singleLine = true,
+                    visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation()
+                )
+                androidx.compose.material3.OutlinedTextField(
+                    value = second,
+                    onValueChange = { if (it.length <= 12 && it.all(Char::isDigit)) { second = it; error = null } },
+                    label = { Text("Confirm PIN") },
+                    singleLine = true,
+                    visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation()
+                )
+                error?.let { Text(it) }
+            }
+        },
+        confirmButton = {
+            Button(onClick = {
+                when {
+                    first.length !in 4..12 -> error = "PIN must contain 4 to 12 digits"
+                    first != second -> error = "PINs do not match"
+                    else -> {
+                        manager.enable(first.toCharArray())
+                        onSaved()
+                    }
+                }
+            }) { Text("Save") }
+        },
+        dismissButton = {
+            Button(onClick = onDismiss) { Text("Cancel") }
+        }
+    )
 }
