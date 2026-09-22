@@ -74,6 +74,7 @@ class MainActivity : FragmentActivity() {
     private val pinLock by lazy { PinLockManager(this) }
     private var screen by mutableStateOf(Screen.GALLERY)
     private var detailItem by mutableStateOf<MediaItem?>(null)
+    private var leftForeground = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -121,9 +122,21 @@ class MainActivity : FragmentActivity() {
         }
     }
 
+    override fun onStart() {
+        super.onStart()
+        if (leftForeground && pinLock.isEnabled()) {
+            screen = Screen.LOCK
+        }
+        leftForeground = false
+    }
+
+    override fun onStop() {
+        leftForeground = true
+        super.onStop()
+    }
+
     override fun onResume() {
         super.onResume()
-        if (pinLock.isEnabled() && screen != Screen.LOCK) screen = Screen.LOCK
         if (!loading && screen == Screen.GALLERY) loadGallery()
     }
 
