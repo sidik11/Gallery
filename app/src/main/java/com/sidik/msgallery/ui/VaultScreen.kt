@@ -26,6 +26,7 @@ import androidx.media3.ui.PlayerView
 import com.sidik.msgallery.security.BiometricAuth
 import com.sidik.msgallery.security.CryptoDataSource
 import com.sidik.msgallery.security.KeyManager
+import com.sidik.msgallery.security.PinLockManager
 import com.sidik.msgallery.security.VaultRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -37,13 +38,16 @@ private enum class VaultType { IMAGE, VIDEO, UNKNOWN }
 fun VaultScreen(
     context: Context,
     onBack: () -> Unit,
-    onImport: () -> Unit
+    onImport: () -> Unit,
+    pinLock: PinLockManager
 ) {
     val repository = remember { VaultRepository(context) }
     val keyManager = remember { KeyManager() }
     var unlocked by remember { mutableStateOf(false) }
     var files by remember { mutableStateOf(repository.listEncrypted()) }
     var selected by remember { mutableStateOf<File?>(null) }
+    var pinChecking by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
 
     Column(
         Modifier.fillMaxSize().padding(16.dp),
@@ -70,7 +74,34 @@ fun VaultScreen(
                         }
                     }
                 }
-            ) { Text("Unlock Vault") }
+            ) { Text("Unlock with biometrics") }
+
+            if (pinLock.isEnabled()) {
+                var pin by remember { mutableStateOf("") }
+                OutlinedTextField(
+                    value = pin,
+                    onValueChange = { value ->
+                        if (value.length <= 12 && value.all(Char::isDigit)) pin = value
+                    },
+                    label = { Text("App PIN") },
+                    singleLine = true,
+                    visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                    enabled = !pinChecking
+                )
+                OutlinedButton(
+                    enabled = pin.length >= 4 && !pinChecking,
+                    onClick = {
+                        val entered = pin
+                        pinChecking = true
+                        scope.launch {
+                            val success = pinLock.verifyWithThrottle(entered.toCharArray())
+                            pinChecking = false
+                            pin = ""
+                            if (success) unlocked = true
+                        }
+                    }
+                ) { Text(if (pinChecking) "Checking…" else "Unlock with PIN") }
+            }
         } else {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(onClick = {
