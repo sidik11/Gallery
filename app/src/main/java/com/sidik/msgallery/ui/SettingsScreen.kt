@@ -8,7 +8,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material.icons.filled.Security
+import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material3.Button
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Card
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -30,7 +32,9 @@ fun SettingsScreen(
     onBack: () -> Unit,
     onVault: () -> Unit,
     onStorage: () -> Unit,
-    pinLock: PinLockManager
+    pinLock: PinLockManager,
+    themeMode: String,
+    onThemeModeChange: (String) -> Unit
 ) {
     var showPinSetup by remember { mutableStateOf(false) }
     var pinEnabled by remember { mutableStateOf(pinLock.isEnabled()) }
@@ -72,6 +76,19 @@ fun SettingsScreen(
                 pinEnabled = false
             }) {
                 Text("Disable App PIN")
+            }
+        }
+
+        Card {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Icon(Icons.Default.DarkMode, null)
+                Text("Appearance", style = MaterialTheme.typography.titleLarge)
+                Text("Theme applies immediately and is kept in memory only.", style = MaterialTheme.typography.bodyMedium)
+                androidx.compose.foundation.layout.Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(themeMode == "system", { onThemeModeChange("system") }, label = { Text("System") })
+                    FilterChip(themeMode == "light", { onThemeModeChange("light") }, label = { Text("Light") })
+                    FilterChip(themeMode == "dark", { onThemeModeChange("dark") }, label = { Text("Dark") })
+                }
             }
         }
 
